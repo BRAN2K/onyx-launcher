@@ -10,6 +10,7 @@ import {
   Coffee,
   Cpu,
   Database,
+  ExternalLink,
   FileJson,
   FolderOpen,
   Gauge,
@@ -33,6 +34,7 @@ import type {
 } from "../types";
 import { useI18n } from "../i18n";
 import { formatBytes } from "../utils";
+import { DiscordIcon } from "../components/DiscordIcon";
 import packageMetadata from "../../package.json";
 
 interface SettingsPageProps {
@@ -161,6 +163,16 @@ export function SettingsPage({
               <small>{packageMetadata.version} · {t("settings.channel")}</small>
             </div>
           </div>
+          <a
+            href="https://discord.gg/qHZCehveYp"
+            target="_blank"
+            rel="noreferrer"
+            className="settings-discord-link"
+          >
+            <DiscordIcon size={15} />
+            <span>{t("settings.discordNav")}</span>
+            <ExternalLink size={12} />
+          </a>
         </nav>
 
         <section className="settings-content">
@@ -235,6 +247,33 @@ export function SettingsPage({
                   checked={settings.telemetry !== false}
                   onChange={(value) => void update({ telemetry: value })}
                 />
+              </SettingsGroup>
+
+              <SettingsGroup title={t("settings.community")}>
+                <div className="setting-row">
+                  <span className="setting-row__icon">
+                    <DiscordIcon size={17} />
+                  </span>
+                  <div>
+                    <strong>{t("settings.discordCommunity")}</strong>
+                    <p>{t("settings.discordCommunityHint")}</p>
+                  </div>
+                  <a
+                    href="https://discord.gg/qHZCehveYp"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="button button--secondary button--mini"
+                    style={{
+                      textDecoration: "none",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <span>{t("settings.discordJoin")}</span>
+                    <ExternalLink size={12} />
+                  </a>
+                </div>
               </SettingsGroup>
             </>
           )}

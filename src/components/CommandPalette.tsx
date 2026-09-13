@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { useI18n, type TranslationKey } from "../i18n";
+import { DiscordIcon } from "./DiscordIcon";
 import type { GameInstance, RouteId } from "../types";
 
 interface CommandPaletteProps {
@@ -104,9 +105,43 @@ export function CommandPalette({
     onClose();
   };
 
+  const allActions = useMemo(
+    () => [
+      {
+        id: "create",
+        title: t("command.create"),
+        hint: t("command.createHint"),
+        icon: Plus,
+        keywords: "create new instance add",
+        run: onCreate,
+      },
+      {
+        id: "discord",
+        title: t("command.discord"),
+        hint: t("command.discordHint"),
+        icon: DiscordIcon,
+        keywords: "discord community chat help support server",
+        run: () => {
+          window.open("https://discord.gg/qHZCehveYp", "_blank");
+        },
+      },
+    ],
+    [t, onCreate],
+  );
+
+  const matchingActions = useMemo(() => {
+    if (!query.trim()) return allActions;
+    const q = query.toLowerCase();
+    return allActions.filter((action) =>
+      `${action.title} ${action.hint} ${action.keywords}`
+        .toLowerCase()
+        .includes(q),
+    );
+  }, [allActions, query]);
+
   const visibleInstances = matchingInstances.slice(0, 4);
   const actionCount =
-    visibleInstances.length + matchingCommands.length + 1;
+    visibleInstances.length + matchingCommands.length + matchingActions.length;
   const runActive = () => {
     if (activeIndex < visibleInstances.length) {
       act(() => onPlay(visibleInstances[activeIndex]));
@@ -117,7 +152,10 @@ export function CommandPalette({
       act(() => onNavigate(matchingCommands[commandIndex].id));
       return;
     }
-    act(onCreate);
+    const actionIndex = commandIndex - matchingCommands.length;
+    if (actionIndex < matchingActions.length) {
+      act(matchingActions[actionIndex].run);
+    }
   };
 
   return (
@@ -229,33 +267,45 @@ export function CommandPalette({
                 </div>
               )}
 
-              <div className="command-group">
-                <p>{t("command.actions")}</p>
-                <button
-                  className={
-                    activeIndex === actionCount - 1 ? "is-selected" : ""
-                  }
-                  onMouseEnter={() => setActiveIndex(actionCount - 1)}
-                  onClick={() => act(onCreate)}
-                >
-                  <span className="command-icon">
-                    <Plus size={17} />
-                  </span>
-                  <span>
-                    <strong>{t("command.create")}</strong>
-                    <small>{t("command.createHint")}</small>
-                  </span>
-                  <ArrowRight size={15} />
-                </button>
-              </div>
-
-              {!matchingInstances.length && !matchingCommands.length && (
-                <div className="command-empty">
-                  <Box size={22} />
-                  <strong>{t("command.empty")}</strong>
-                  <p>{t("command.emptyHint")}</p>
+              {matchingActions.length > 0 && (
+                <div className="command-group">
+                  <p>{t("command.actions")}</p>
+                  {matchingActions.map((action, index) => {
+                    const Icon = action.icon;
+                    const itemIndex =
+                      visibleInstances.length + matchingCommands.length + index;
+                    return (
+                      <button
+                        key={action.id}
+                        className={
+                          activeIndex === itemIndex ? "is-selected" : ""
+                        }
+                        onMouseEnter={() => setActiveIndex(itemIndex)}
+                        onClick={() => act(action.run)}
+                      >
+                        <span className="command-icon">
+                          <Icon size={17} />
+                        </span>
+                        <span>
+                          <strong>{action.title}</strong>
+                          <small>{action.hint}</small>
+                        </span>
+                        <ArrowRight size={15} />
+                      </button>
+                    );
+                  })}
                 </div>
               )}
+
+              {!matchingInstances.length &&
+                !matchingCommands.length &&
+                !matchingActions.length && (
+                  <div className="command-empty">
+                    <Box size={22} />
+                    <strong>{t("command.empty")}</strong>
+                    <p>{t("command.emptyHint")}</p>
+                  </div>
+                )}
             </div>
 
             <div className="command-footer">

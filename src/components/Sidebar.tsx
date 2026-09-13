@@ -2,8 +2,10 @@ import { motion } from "framer-motion";
 import {
   ChevronDown,
   CircleUserRound,
+  ExternalLink,
   Settings,
 } from "lucide-react";
+import { DiscordIcon } from "./DiscordIcon";
 import { navigation } from "../data";
 import { useI18n } from "../i18n";
 import type { DownloadTask, Profile, RouteId } from "../types";
@@ -62,6 +64,18 @@ export function Sidebar({
       </div>
 
       <div className="sidebar__footer">
+        <a
+          href="https://discord.gg/qHZCehveYp"
+          target="_blank"
+          rel="noreferrer"
+          className="nav-item nav-item--external"
+          title={t("nav.discord")}
+        >
+          <DiscordIcon size={18} />
+          <span>{t("nav.discord")}</span>
+          <ExternalLink size={12} className="nav-item__ext" />
+        </a>
+
         <button
           className={`nav-item ${activeRoute === "settings" ? "is-active" : ""}`}
           onClick={() => onNavigate("settings")}

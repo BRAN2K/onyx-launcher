@@ -462,6 +462,26 @@ kbd {
   border-top: 1px solid var(--line);
 }
 
+.nav-item--external {
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.nav-item--external:hover {
+  text-decoration: none;
+  color: var(--text);
+}
+
+.nav-item__ext {
+  margin-left: auto;
+  opacity: 0.35;
+  transition: opacity 120ms ease;
+}
+
+.nav-item--external:hover .nav-item__ext {
+  opacity: 0.85;
+}
+
 .profile-card {
   display: flex;
   align-items: center;
@@ -3400,6 +3420,37 @@ kbd {
   margin-top: 1px;
   color: var(--text-muted);
   font-size: 11px;
+}
+
+.settings-discord-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  color: var(--text-soft);
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+
+.settings-discord-link:hover {
+  background: rgba(88, 101, 242, 0.12);
+  border-color: rgba(88, 101, 242, 0.3);
+  color: #7983f5;
+  text-decoration: none;
+}
+
+.settings-discord-link svg:last-child {
+  margin-left: auto;
+  opacity: 0.45;
 }
 
 .settings-content {
