@@ -263,6 +263,7 @@ class AuthService {
         uuid: profile.id,
         kind: "microsoft",
         skins: profile.skins || [],
+        capes: profile.capes || [],
         avatarUrl: `https://mc-heads.net/avatar/${profile.id}/64`,
       },
       launchAccount: {
@@ -408,6 +409,7 @@ class AuthService {
       uuid: remote.id,
       kind: "microsoft",
       skins: Array.isArray(remote.skins) ? remote.skins : [],
+      capes: Array.isArray(remote.capes) ? remote.capes : [],
       avatarUrl: `https://mc-heads.net/avatar/${remote.id}/64?skin=${Date.now()}`,
     };
     await this.replaceProfile(profile);

@@ -100,6 +100,15 @@ export function ContentModal({
   }, [load]);
 
   useEffect(() => {
+    if (!instance) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [instance, onClose]);
+
+  useEffect(() => {
     return window.onyx.onContentUpdateProgress((event) => {
       if (!instance || event.instanceId !== instance.id) return;
       setProgress((current) => ({

@@ -2,7 +2,6 @@ export type RouteId =
   | "home"
   | "library"
   | "discover"
-  | "picks"
   | "downloads"
   | "instance"
   | "skins"
@@ -27,6 +26,7 @@ export interface Profile {
   uuid?: string;
   signedInAt?: string;
   skins?: Array<{ id: string; state: string; url: string; variant?: string }>;
+  capes?: Array<{ id: string; state: string; url: string; alias?: string }>;
 }
 
 export interface LauncherSettings {
@@ -608,6 +608,56 @@ export interface AuthLogin {
   message?: string;
 }
 
+export interface DiscoveredInstance {
+  sourceLauncher:
+    | "curseforge"
+    | "prism"
+    | "modrinth"
+    | "vanilla"
+    | "atlauncher"
+    | "multimc"
+    | "feather"
+    | "custom"
+    | string;
+  name: string;
+  version: string;
+  loader: "fabric" | "forge" | "neoforge" | "quilt" | "vanilla" | string;
+  loaderVersion: string | null;
+  instancePath: string;
+  gameDir: string;
+  modCount: number;
+  worldCount: number;
+  hasOptions: boolean;
+  hasServers: boolean;
+  iconUrl?: string | null;
+}
+
+export interface DiscoveredLauncher {
+  id: string;
+  name: string;
+  detected: boolean;
+  path: string | null;
+  instances: DiscoveredInstance[];
+}
+
+export interface MigrationDetectionResult {
+  launchers: DiscoveredLauncher[];
+  totalInstances: number;
+}
+
+export interface MigrationProgress {
+  current: number;
+  total: number;
+  instanceName: string;
+  phase: "copying" | "done";
+  percent: number;
+}
+
+export interface MigrationResult {
+  imported: GameInstance[];
+  errors: Array<{ name: string; error: string }>;
+}
+
 export interface OnyxBridge {
   window: {
     minimize(): Promise<void>;
@@ -805,6 +855,15 @@ export interface OnyxBridge {
       files: number;
     } | null>;
   };
+  migration: {
+    detect(): Promise<MigrationDetectionResult>;
+    browseFolder(): Promise<{
+      folderPath: string;
+      candidate: DiscoveredInstance | null;
+    } | null>;
+    inspectFolder(folderPath: string): Promise<DiscoveredInstance | null>;
+    import(candidates: DiscoveredInstance[]): Promise<MigrationResult>;
+  };
   onDownloadProgress(
     callback: (progress: DownloadProgress) => void,
   ): () => void;
@@ -846,5 +905,8 @@ export interface OnyxBridge {
       total?: number;
       done?: boolean;
     }) => void,
+  ): () => void;
+  onMigrationProgress(
+    callback: (progress: MigrationProgress) => void,
   ): () => void;
 }

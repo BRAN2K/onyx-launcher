@@ -1,63 +1,32 @@
-import { type CSSProperties, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
   Check,
+  Footprints,
+  Hand,
   ImagePlus,
   LoaderCircle,
+  Pause,
   RefreshCw,
+  Sparkles,
+  Upload,
   UserRound,
+  Wind,
+  Zap,
 } from 'lucide-react';
 import { useI18n } from '../i18n';
 import type { Profile } from '../types';
+import {
+  SkinViewer3D,
+  type SkinAnimationName,
+  type SkinLayers,
+} from '../components/SkinViewer3D';
+import { CAPE_PRESETS, createVanillaElytraTexture } from '../components/capePresets';
 
-type SkinPart = 'head' | 'body' | 'right-arm' | 'left-arm' | 'right-leg' | 'left-leg';
-
-const skinParts: SkinPart[] = [
-  'head',
-  'body',
-  'right-arm',
-  'left-arm',
-  'right-leg',
-  'left-leg',
-];
-
-const skinFaces = ['front', 'back', 'right', 'left', 'top', 'bottom'] as const;
-
-function SkinCuboid({ part }: { part: SkinPart }) {
-  return (
-    <div className={`skin-model__part skin-model__part--${part}`}>
-      {skinFaces.map((face) => (
-        <i className={`skin-model__face skin-model__face--${face}`} key={face} />
-      ))}
-    </div>
-  );
-}
-
-function SkinModel({
-  url,
-  variant,
-}: {
-  url: string;
-  variant?: string;
-}) {
-  const style = {
-    '--skin-url': `url("${url}")`,
-  } as CSSProperties & Record<'--skin-url', string>;
-
-  return (
-    <div
-      className={`skin-model ${variant === 'slim' ? 'skin-model--slim' : ''}`}
-      style={style}
-      aria-hidden='true'
-    >
-      <div className='skin-model__scene'>
-        {skinParts.map((part) => (
-          <SkinCuboid part={part} key={part} />
-        ))}
-      </div>
-    </div>
-  );
-}
+const DEFAULT_STEVE_URL =
+  'https://textures.minecraft.net/texture/1a4af718455d2aab528e7a61f86fa25e6a369d1768dcb13f7df319a713eb810b';
+const DEFAULT_ALEX_URL =
+  'https://textures.minecraft.net/texture/e5d848149818815fb5f891b0c0f8653245f78ffef1bc5c8065a7df4cf95cb7fd';
 
 interface SkinsPageProps {
   profile: Profile;
@@ -76,9 +45,23 @@ export function SkinsPage({ profile, onAccount, onNotify }: SkinsPageProps) {
     profile.uuid || null,
   );
   const [skinVariant, setSkinVariant] = useState<'classic' | 'slim'>('classic');
+  const [animationMode, setAnimationMode] = useState<SkinAnimationName>('idle');
+  const [equipmentType, setEquipmentType] = useState<'cape' | 'elytra'>('cape');
+  const [selectedCapeId, setSelectedCapeId] = useState<string>('onyx');
+  const [customCapeUrl, setCustomCapeUrl] = useState<string | null>(null);
+  const [layers, setLayers] = useState<SkinLayers>({
+    hat: true,
+    jacket: true,
+    leftSleeve: true,
+    rightSleeve: true,
+    leftPants: true,
+    rightPants: true,
+  });
+
   const [skinBusy, setSkinBusy] = useState(false);
   const [profileBusy, setProfileBusy] = useState(false);
   const refreshedAccountIds = useRef(new Set<string>());
+  const capeFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -118,7 +101,9 @@ export function SkinsPage({ profile, onAccount, onNotify }: SkinsPageProps) {
     selectedAccount?.skins?.[0];
 
   useEffect(() => {
-    setSkinVariant(selectedSkin?.variant === 'slim' ? 'slim' : 'classic');
+    setSkinVariant(
+      selectedSkin?.variant?.toLowerCase() === 'slim' ? 'slim' : 'classic',
+    );
   }, [selectedAccountId, selectedSkin?.id, selectedSkin?.variant]);
 
   useEffect(() => {
@@ -208,6 +193,94 @@ export function SkinsPage({ profile, onAccount, onNotify }: SkinsPageProps) {
     }
   };
 
+  const handleCustomCapeUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const url = event.target?.result as string;
+      if (url) {
+        setCustomCapeUrl(url);
+        setSelectedCapeId('custom');
+        onNotify('success', t('settings.skins.capeLoaded'), file.name);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Determine current active cape texture URL and back equipment type
+  const { activeCapeUrl, backEquipment } = useMemo(() => {
+    if (equipmentType === 'elytra') {
+      if (selectedCapeId === 'none' || selectedCapeId === 'elytra') {
+        return {
+          activeCapeUrl: createVanillaElytraTexture(),
+          backEquipment: 'elytra' as const,
+        };
+      }
+      if (selectedCapeId === 'custom') {
+        return {
+          activeCapeUrl: customCapeUrl || createVanillaElytraTexture(),
+          backEquipment: 'elytra' as const,
+        };
+      }
+      if (selectedCapeId.startsWith('account-')) {
+        const capeId = selectedCapeId.replace('account-', '');
+        const cape = selectedAccount?.capes?.find((c) => c.id === capeId);
+        return {
+          activeCapeUrl: cape?.url || createVanillaElytraTexture(),
+          backEquipment: 'elytra' as const,
+        };
+      }
+      const preset = CAPE_PRESETS.find((p) => p.id === selectedCapeId);
+      return {
+        activeCapeUrl: preset?.getDataUrl
+          ? preset.getDataUrl()
+          : createVanillaElytraTexture(),
+        backEquipment: 'elytra' as const,
+      };
+    }
+
+    // Cape mode
+    if (selectedCapeId === 'none') {
+      return { activeCapeUrl: null, backEquipment: null };
+    }
+    if (selectedCapeId === 'elytra') {
+      return {
+        activeCapeUrl: createVanillaElytraTexture(),
+        backEquipment: 'elytra' as const,
+      };
+    }
+    if (selectedCapeId === 'custom') {
+      return { activeCapeUrl: customCapeUrl, backEquipment: 'cape' as const };
+    }
+    if (selectedCapeId.startsWith('account-')) {
+      const capeId = selectedCapeId.replace('account-', '');
+      const cape = selectedAccount?.capes?.find((c) => c.id === capeId);
+      return { activeCapeUrl: cape?.url || null, backEquipment: 'cape' as const };
+    }
+
+    const preset = CAPE_PRESETS.find((p) => p.id === selectedCapeId);
+    if (preset?.getDataUrl) {
+      return { activeCapeUrl: preset.getDataUrl(), backEquipment: 'cape' as const };
+    }
+
+    return { activeCapeUrl: null, backEquipment: null };
+  }, [equipmentType, selectedCapeId, customCapeUrl, selectedAccount?.capes]);
+
+  const toggleLayer = (layerKey: keyof SkinLayers) => {
+    setLayers((prev) => {
+      if (layerKey === 'leftSleeve' || layerKey === 'rightSleeve') {
+        const next = !prev.leftSleeve;
+        return { ...prev, leftSleeve: next, rightSleeve: next };
+      }
+      if (layerKey === 'leftPants' || layerKey === 'rightPants') {
+        const next = !prev.leftPants;
+        return { ...prev, leftPants: next, rightPants: next };
+      }
+      return { ...prev, [layerKey]: !prev[layerKey] };
+    });
+  };
+
   return (
     <motion.div
       className='page skins-page'
@@ -226,6 +299,7 @@ export function SkinsPage({ profile, onAccount, onNotify }: SkinsPageProps) {
 
       {accounts.length ? (
         <div className='skin-manager'>
+          {/* Account Selector Column */}
           <div className='skin-manager__accounts'>
             <div className='skin-manager__accounts-heading'>
               <strong>{t('auth.savedAccounts')}</strong>
@@ -249,13 +323,20 @@ export function SkinsPage({ profile, onAccount, onNotify }: SkinsPageProps) {
                     onClick={() => {
                       setSelectedAccountId(account.uuid || null);
                       setSkinVariant(
-                        accountSkin?.variant === 'slim' ? 'slim' : 'classic',
+                        accountSkin?.variant?.toLowerCase() === 'slim'
+                          ? 'slim'
+                          : 'classic',
                       );
                     }}
                   >
                     <span>
-                      {accountSkin ? (
-                        <img src={accountSkin.url} alt='' />
+                      {account.avatarUrl ? (
+                        <img src={account.avatarUrl} alt='' />
+                      ) : accountSkin ? (
+                        <img
+                          src={accountSkin.url.replace(/^http:/i, 'https:')}
+                          alt=''
+                        />
                       ) : (
                         <UserRound size={20} />
                       )}
@@ -274,41 +355,194 @@ export function SkinsPage({ profile, onAccount, onNotify }: SkinsPageProps) {
               })}
             </div>
           </div>
+
+          {/* 3D Showcase & Wardrobe Editor */}
           {selectedAccount ? (
             <div className='skin-manager__editor'>
+              {/* 3D Viewport Showcase */}
               <div className='skin-manager__preview'>
-                {selectedSkin ? (
-                  <SkinModel
-                    url={selectedSkin.url}
-                    variant={selectedSkin.variant}
-                  />
-                ) : (
-                  <ImagePlus size={34} />
-                )}
+                <SkinViewer3D
+                  skinUrl={
+                    selectedSkin?.url ||
+                    (skinVariant === 'slim' ? DEFAULT_ALEX_URL : DEFAULT_STEVE_URL)
+                  }
+                  variant={skinVariant}
+                  capeUrl={activeCapeUrl}
+                  backEquipment={backEquipment}
+                  animationMode={animationMode}
+                  layers={layers}
+                  playerName={selectedAccount.name}
+                  onNotify={onNotify}
+                />
               </div>
+
+              {/* Wardrobe Controls & Customization */}
               <div className='skin-manager__details'>
-                <p className='eyebrow'>{t('auth.skin')}</p>
-                <h3>{selectedAccount.name}</h3>
-                <p>
-                  {selectedAccount.kind === 'offline'
-                    ? t('auth.skin.offlineHint')
-                    : t('settings.skins.licensedHint')}
-                </p>
-                <label>
-                  {t('auth.skin.variant')}
-                  <select
-                    value={skinVariant}
-                    onChange={(event) =>
-                      setSkinVariant(
-                        event.target.value === 'slim' ? 'slim' : 'classic',
-                      )
-                    }
-                    disabled={skinBusy}
-                  >
-                    <option value='classic'>{t('auth.skin.classic')}</option>
-                    <option value='slim'>{t('auth.skin.slim')}</option>
-                  </select>
-                </label>
+                <div className='wardrobe-header'>
+                  <div>
+                    <p className='eyebrow'>{t('auth.skin')}</p>
+                    <h3>{selectedAccount.name}</h3>
+                  </div>
+                  <span className='wardrobe-badge'>
+                    <Sparkles size={13} /> 3D Studio
+                  </span>
+                </div>
+
+                {/* Model Variant Selector */}
+                <div className='wardrobe-section'>
+                  <label className='wardrobe-label'>
+                    {t('auth.skin.variant')}
+                  </label>
+                  <div className='wardrobe-pills'>
+                    <button
+                      type='button'
+                      className={`wardrobe-pill ${skinVariant === 'classic' ? 'is-active' : ''}`}
+                      onClick={() => setSkinVariant('classic')}
+                      disabled={skinBusy}
+                    >
+                      {t('auth.skin.classic')}
+                    </button>
+                    <button
+                      type='button'
+                      className={`wardrobe-pill ${skinVariant === 'slim' ? 'is-active' : ''}`}
+                      onClick={() => setSkinVariant('slim')}
+                      disabled={skinBusy}
+                    >
+                      {t('auth.skin.slim')}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Animation Selector */}
+                <div className='wardrobe-section'>
+                  <label className='wardrobe-label'>
+                    {t('settings.skins.animation')}
+                  </label>
+                  <div className='wardrobe-pills wardrobe-pills--wrap'>
+                    {[
+                      { id: 'idle', icon: Sparkles, label: t('settings.skins.anim.idle') },
+                      { id: 'walk', icon: Footprints, label: t('settings.skins.anim.walk') },
+                      { id: 'run', icon: Zap, label: t('settings.skins.anim.run') },
+                      { id: 'fly', icon: Wind, label: t('settings.skins.anim.fly') },
+                      { id: 'wave', icon: Hand, label: t('settings.skins.anim.wave') },
+                      { id: 'none', icon: Pause, label: t('settings.skins.anim.none') },
+                    ].map(({ id, icon: Icon, label }) => (
+                      <button
+                        key={id}
+                        type='button'
+                        className={`wardrobe-pill ${animationMode === id ? 'is-active' : ''}`}
+                        onClick={() => setAnimationMode(id as SkinAnimationName)}
+                      >
+                        <Icon size={13} /> {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Cape & Wings Selector */}
+                <div className='wardrobe-section'>
+                  <div className='wardrobe-section__title-row'>
+                    <label className='wardrobe-label'>
+                      {t('settings.skins.capes')}
+                    </label>
+                    <div className='wardrobe-equipment-pills'>
+                      <button
+                        type='button'
+                        className={`wardrobe-equipment-pill ${equipmentType === 'cape' ? 'is-active' : ''}`}
+                        onClick={() => setEquipmentType('cape')}
+                      >
+                        ✦ Cape
+                      </button>
+                      <button
+                        type='button'
+                        className={`wardrobe-equipment-pill ${equipmentType === 'elytra' ? 'is-active' : ''}`}
+                        onClick={() => {
+                          setEquipmentType('elytra');
+                          if (selectedCapeId === 'none') {
+                            setSelectedCapeId('elytra');
+                          }
+                        }}
+                      >
+                        🪽 Elytra
+                      </button>
+                    </div>
+                  </div>
+                  <div className='wardrobe-cape-row'>
+                    <select
+                      className='wardrobe-select'
+                      value={selectedCapeId}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedCapeId(val);
+                        if (val === 'elytra') {
+                          setEquipmentType('elytra');
+                        }
+                      }}
+                    >
+                      {/* Account Capes */}
+                      {selectedAccount.capes?.map((cape) => (
+                        <option key={cape.id} value={`account-${cape.id}`}>
+                          ✦ {cape.alias || 'Account Cape'}
+                        </option>
+                      ))}
+
+                      {/* Built-in Presets */}
+                      {CAPE_PRESETS.map((preset) => (
+                        <option key={preset.id} value={preset.id}>
+                          {preset.name}
+                        </option>
+                      ))}
+
+                      {/* Custom Cape if loaded */}
+                      {customCapeUrl && (
+                        <option value='custom'>Custom Uploaded Cape</option>
+                      )}
+                    </select>
+
+                    <button
+                      type='button'
+                      className='button button--ghost wardrobe-upload-btn'
+                      title={t('settings.skins.customCape')}
+                      onClick={() => capeFileInputRef.current?.click()}
+                    >
+                      <Upload size={14} />
+                    </button>
+                    <input
+                      ref={capeFileInputRef}
+                      type='file'
+                      accept='image/png'
+                      hidden
+                      onChange={handleCustomCapeUpload}
+                    />
+                  </div>
+                </div>
+
+                {/* Outer Layers Checkboxes */}
+                <div className='wardrobe-section'>
+                  <label className='wardrobe-label'>
+                    {t('settings.skins.layers')}
+                  </label>
+                  <div className='wardrobe-layers'>
+                    {[
+                      { key: 'hat', label: t('settings.skins.layer.hat'), checked: layers.hat },
+                      { key: 'jacket', label: t('settings.skins.layer.jacket'), checked: layers.jacket },
+                      { key: 'leftSleeve', label: t('settings.skins.layer.sleeves'), checked: layers.leftSleeve },
+                      { key: 'leftPants', label: t('settings.skins.layer.pants'), checked: layers.leftPants },
+                    ].map(({ key, label, checked }) => (
+                      <button
+                        key={key}
+                        type='button'
+                        className={`wardrobe-chip ${checked ? 'is-active' : ''}`}
+                        onClick={() => toggleLayer(key as keyof SkinLayers)}
+                      >
+                        <span className='wardrobe-chip__dot' />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Primary Actions */}
                 <div className='skin-manager__actions'>
                   <button
                     className='button button--primary'
@@ -325,6 +559,7 @@ export function SkinsPage({ profile, onAccount, onNotify }: SkinsPageProps) {
                       ? t('settings.skins.uploading')
                       : t('auth.skin.change')}
                   </button>
+
                   {selectedAccount.kind === 'microsoft' && (
                     <button
                       className='button button--secondary'

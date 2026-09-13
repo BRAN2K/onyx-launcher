@@ -2,12 +2,8 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import {
   ArrowRight,
-  Boxes,
-  Clock3,
-  ExternalLink,
   Folder,
   FolderOpen,
-  Layers3,
   LoaderCircle,
   Play,
   Plus,
@@ -15,7 +11,6 @@ import {
   Server,
   Settings,
   ShieldAlert,
-  ShieldCheck,
   Sparkles,
   Square,
   Wrench,
@@ -133,7 +128,7 @@ export function HomePage({
     >
       <div className="page-heading page-heading--home">
         <div>
-          <p className="eyebrow">COMMAND CENTER</p>
+          <p className="eyebrow">Command center</p>
           <h1>
             {greeting}, <span>{profileName === "Player" ? t("profile.player") : profileName}</span>
           </h1>
@@ -151,8 +146,18 @@ export function HomePage({
       </div>
 
       {activeInstance && (
-        <section className="hero-station">
-          <div className="hero-station__main">
+        <section className="hero-station hero-station--zen">
+          <div className="hero-station__visual">
+            <div className="hero-station__badge-avatar">
+              {activeInstance.iconUrl ? (
+                <img src={activeInstance.iconUrl} alt="" />
+              ) : (
+                <span>{activeInstance.glyph || "MC"}</span>
+              )}
+            </div>
+          </div>
+
+          <div className="hero-station__content">
             <div className="hero-station__tag">
               <span
                 className={`status-pill ${
@@ -177,6 +182,15 @@ export function HomePage({
                   ? t("home.neverPlayed")
                   : activeInstance.lastPlayed}
               </span>
+              {activeInstance.settings?.serverAddress && (
+                <>
+                  <i>·</i>
+                  <span className="hero-station__server-pill">
+                    <Server size={11} />
+                    {activeInstance.settings.serverAddress}
+                  </span>
+                </>
+              )}
             </div>
 
             <h2>{displayName(activeInstance)}</h2>
@@ -184,64 +198,60 @@ export function HomePage({
               <p className="hero-station__desc">{displayDescription(activeInstance)}</p>
             )}
 
-            <div className="hero-station__meta">
-              <span>
-                <Layers3 size={13} />
-                Minecraft {activeInstance.version}
-              </span>
-              <span>
-                <Boxes size={13} />
-                {activeInstance.loader}
-              </span>
-              <span>
-                <Clock3 size={13} />
-                {formatPlaytime(activeInstance.playtimeMinutes, locale)}
-              </span>
+            <div className="hero-station__meta-inline">
+              <span>Minecraft {activeInstance.version}</span>
+              <i>·</i>
+              <span>{activeInstance.loader}</span>
+              <i>·</i>
+              <span>{formatPlaytime(activeInstance.playtimeMinutes, locale)}</span>
               {activeInstance.modCount > 0 && (
-                <span>
-                  {t("home.modsActive", { count: activeInstance.modCount })}
-                </span>
+                <>
+                  <i>·</i>
+                  <span>{t("home.modsActive", { count: activeInstance.modCount })}</span>
+                </>
               )}
             </div>
+          </div>
 
-            <div className="hero-station__actions">
-              <button
-                className={`button button--play ${
-                  isRunning ? "button--danger-quiet" : "button--primary"
-                }`}
-                onClick={() => onPlay(activeInstance)}
-              >
-                {isRunning ? (
-                  <>
-                    <Square size={15} fill="currentColor" />
-                    {t("home.action.stop")}
-                  </>
-                ) : isSetup ? (
-                  <>
-                    <Sparkles size={15} />
-                    {t("home.action.install")}
-                  </>
-                ) : isError ? (
-                  <>
-                    <Wrench size={15} />
-                    {t("home.action.retry")}
-                  </>
-                ) : (
-                  <>
-                    <Play size={15} fill="currentColor" />
-                    {t("home.action.play")}
-                  </>
-                )}
-              </button>
+          <div className="hero-station__cta">
+            <button
+              className={`button button--play button--large ${
+                isRunning ? "button--danger-quiet" : "button--primary"
+              }`}
+              onClick={() => onPlay(activeInstance)}
+            >
+              {isRunning ? (
+                <>
+                  <Square size={16} fill="currentColor" />
+                  {t("home.action.stop")}
+                </>
+              ) : isSetup ? (
+                <>
+                  <Sparkles size={16} />
+                  {t("home.action.install")}
+                </>
+              ) : isError ? (
+                <>
+                  <Wrench size={16} />
+                  {t("home.action.retry")}
+                </>
+              ) : (
+                <>
+                  <Play size={16} fill="currentColor" />
+                  {t("home.action.play")}
+                </>
+              )}
+            </button>
 
+            <div className="hero-station__quick-tools">
               <button
                 className="button button--secondary"
                 onClick={() => onOpen(activeInstance)}
+                title={t("common.open")}
               >
                 <FolderOpen size={14} />
                 <span>{t("common.open")}</span>
               </button>
-
               <button
                 className="button button--secondary button--icon-only"
                 onClick={() => onConfigure(activeInstance)}
@@ -249,7 +259,6 @@ export function HomePage({
               >
                 <Settings size={14} />
               </button>
-
               <button
                 className="button button--secondary button--icon-only"
                 onClick={() => void window.onyx.state.openInstanceFolder(activeInstance.id)}
@@ -259,61 +268,30 @@ export function HomePage({
               </button>
             </div>
           </div>
-
-          <div className="hero-station__telemetry">
-            <div className="hero-station__card">
-              <div className="hero-station__card-head">
-                <div className="hero-station__glyph">
-                  {activeInstance.iconUrl ? (
-                    <img src={activeInstance.iconUrl} alt="" />
-                  ) : (
-                    <span>{activeInstance.glyph || "MC"}</span>
-                  )}
-                </div>
-                <div>
-                  <strong>{displayName(activeInstance)}</strong>
-                  <small>Minecraft {activeInstance.version} · {activeInstance.loader.split(" ")[0]}</small>
-                </div>
-              </div>
-
-              <div className="hero-station__specs">
-                <div className="hero-station__spec">
-                  <small>MEMORY</small>
-                  <strong>
-                    {activeInstance.settings?.memory
-                      ? `${activeInstance.settings.memory} MB`
-                      : "Auto (4 GB)"}
-                  </strong>
-                </div>
-                <div className="hero-station__spec">
-                  <small>JAVA RUNTIME</small>
-                  <strong>
-                    {activeInstance.javaMajor
-                      ? `Java ${activeInstance.javaMajor}`
-                      : "Java 21 (Auto)"}
-                  </strong>
-                </div>
-                <div className="hero-station__spec">
-                  <small>ONYX GUARD</small>
-                  <strong className={isError ? "text-danger" : "text-emerald"}>
-                    {isError ? "Issue detected" : "All checks pass"}
-                  </strong>
-                </div>
-                <div className="hero-station__spec">
-                  <small>WORLD SNAPSHOTS</small>
-                  <strong className="text-emerald">Armed</strong>
-                </div>
-              </div>
-
-              {activeInstance.settings?.serverAddress && (
-                <div className="hero-station__server">
-                  <Server size={12} />
-                  <span>{activeInstance.settings.serverAddress}</span>
-                </div>
-              )}
-            </div>
-          </div>
         </section>
+      )}
+
+      {failedInstance && (
+        <div className="incident-banner">
+          <div className="incident-banner__icon">
+            <ShieldAlert size={20} />
+          </div>
+          <div className="incident-banner__copy">
+            <strong>
+              Last launch of {displayName(failedInstance)} exited with code {failedInstance.lastExitCode ?? 1}
+            </strong>
+            <p>
+              {failedInstance.lastDiagnosis?.message || "Crash log recorded and ready for analysis."}
+            </p>
+          </div>
+          <button
+            className="button button--danger-quiet button--small"
+            onClick={() => onOpen(failedInstance)}
+          >
+            <Wrench size={13} />
+            Analyze Crash & Bisect
+          </button>
+        </div>
       )}
 
       <section className="dashboard-section">
@@ -393,57 +371,7 @@ export function HomePage({
         </div>
       </section>
 
-      <section className="ops-grid">
-        <div className={`ops-card ops-card--guard ${failedInstance ? "has-alert" : ""}`}>
-          <div className="ops-card__head">
-            <div className={`ops-card__icon ${failedInstance ? "ops-card__icon--danger" : ""}`}>
-              {failedInstance ? <ShieldAlert size={16} /> : <ShieldCheck size={16} />}
-            </div>
-            <div className="ops-card__titles">
-              <strong>Onyx Guard</strong>
-              <span>{failedInstance ? "Action required" : "Integrity verified"}</span>
-            </div>
-          </div>
-          <div className="ops-card__body">
-            {failedInstance ? (
-              <div className="guard-crash-info">
-                <p className="guard-crash-msg">
-                  Last launch of <strong>{displayName(failedInstance)}</strong> exited with code {failedInstance.lastExitCode ?? 1}.
-                </p>
-                <p className="guard-crash-diagnosis">
-                  {failedInstance.lastDiagnosis?.message || "Crash log recorded and ready for analysis."}
-                </p>
-              </div>
-            ) : (
-              <div className="guard-clean-info">
-                <div className="guard-clean-row">
-                  <span className="text-emerald">✓</span>
-                  <span>Zero conflicting mod IDs detected</span>
-                </div>
-                <div className="guard-clean-row">
-                  <span className="text-emerald">✓</span>
-                  <span>World Guard safety snapshots armed</span>
-                </div>
-                <div className="guard-clean-row">
-                  <span className="text-emerald">✓</span>
-                  <span>Binary bisect engine ready</span>
-                </div>
-              </div>
-            )}
-            <div className="ops-card__footer">
-              <button
-                className={`button button--full ${
-                  failedInstance ? "button--danger-quiet" : "button--secondary"
-                }`}
-                onClick={() => onOpen(failedInstance ?? activeInstance)}
-              >
-                <Wrench size={13} />
-                {failedInstance ? "Analyze Crash & Bisect" : "Open Diagnostics"}
-              </button>
-            </div>
-          </div>
-        </div>
-
+      <section className="ops-grid ops-grid--single">
         <div className="ops-card ops-card--server">
           <div className="ops-card__head">
             <div className="ops-card__icon">
@@ -501,67 +429,6 @@ export function HomePage({
               >
                 <Play size={13} fill="currentColor" />
                 Connect & Play
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="ops-card ops-card--picks">
-          <div className="ops-card__head">
-            <div className="ops-card__icon">
-              <Sparkles size={16} />
-            </div>
-            <div className="ops-card__titles">
-              <strong>Curated Picks</strong>
-              <span>Tested for performance & shaders</span>
-            </div>
-          </div>
-          <div className="ops-card__body">
-            <div className="picks-fast-list">
-              <div
-                className="picks-fast-item"
-                role="button"
-                tabIndex={0}
-                onClick={() => onNavigate("picks")}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    onNavigate("picks");
-                  }
-                }}
-              >
-                <div className="picks-fast-icon">FO</div>
-                <div className="picks-fast-copy">
-                  <strong>Fabulously Optimized</strong>
-                  <small>400+ FPS · Sodium & Iris shaders</small>
-                </div>
-                <ExternalLink size={13} />
-              </div>
-              <div
-                className="picks-fast-item"
-                role="button"
-                tabIndex={0}
-                onClick={() => onNavigate("picks")}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    onNavigate("picks");
-                  }
-                }}
-              >
-                <div className="picks-fast-icon">SO</div>
-                <div className="picks-fast-copy">
-                  <strong>Simply Optimized</strong>
-                  <small>Lightweight Vanilla+ engine</small>
-                </div>
-                <ExternalLink size={13} />
-              </div>
-            </div>
-            <div className="ops-card__footer">
-              <button
-                className="button button--secondary button--full"
-                onClick={() => onNavigate("picks")}
-              >
-                Explore All Picks
-                <ArrowRight size={13} />
               </button>
             </div>
           </div>

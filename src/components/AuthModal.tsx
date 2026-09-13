@@ -69,10 +69,15 @@ export function AuthModal({
       setCopied(false);
       setAdding(null);
       setOfflineName("");
-    } else {
-      void refreshAccounts();
+      return;
     }
-  }, [open]);
+    void refreshAccounts();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
 
   const begin = async () => {
     setBusy(true);

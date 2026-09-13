@@ -99,6 +99,12 @@ const {
   downloadFile,
   hashFile,
 } = require("./services/network.cjs");
+const {
+  detectAllInstalledInstances,
+  inspectCustomDirectory,
+  migrateInstanceFiles,
+  createOnyxInstanceFromCandidate,
+} = require("./services/migration.cjs");
 
 if (process.env.ONYX_USER_DATA) {
   app.setPath("userData", path.resolve(process.env.ONYX_USER_DATA));
@@ -2051,6 +2057,75 @@ function registerIpc() {
     return result.filePath;
   });
   ipcMain.handle("system:clear-cache", () => clearInstallerCache());
+
+  ipcMain.handle("migration:detect", async () => {
+    return detectAllInstalledInstances();
+  });
+
+  ipcMain.handle("migration:browse-folder", async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ["openDirectory"],
+      title: "Select Minecraft or Launcher Instance Directory",
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    const folderPath = result.filePaths[0];
+    const candidate = await inspectCustomDirectory(folderPath);
+    return { folderPath, candidate };
+  });
+
+  ipcMain.handle("migration:inspect-folder", async (_event, folderPath) => {
+    if (!folderPath) return null;
+    return inspectCustomDirectory(folderPath);
+  });
+
+  ipcMain.handle("migration:import", async (_event, candidates) => {
+    if (!Array.isArray(candidates) || candidates.length === 0) {
+      return { imported: [], errors: [] };
+    }
+    const imported = [];
+    const errors = [];
+    const total = candidates.length;
+
+    for (let i = 0; i < total; i++) {
+      const candidate = candidates[i];
+      const instanceId = crypto.randomUUID();
+      const targetDir = path.join(state.settings.gameDirectory, instanceId);
+
+      send("migration:progress", {
+        current: i + 1,
+        total,
+        instanceName: candidate.name,
+        phase: "copying",
+        percent: Math.round(((i) / total) * 100),
+      });
+
+      try {
+        await fsp.mkdir(targetDir, { recursive: true });
+        await migrateInstanceFiles(candidate.gameDir, targetDir);
+
+        const instance = createOnyxInstanceFromCandidate(candidate, instanceId);
+        state.instances.unshift(instance);
+        await saveState();
+        send("instance:updated", structuredClone(instance));
+        imported.push(instance);
+      } catch (err) {
+        errors.push({
+          name: candidate.name,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    send("migration:progress", {
+      current: total,
+      total,
+      instanceName: "",
+      phase: "done",
+      percent: 100,
+    });
+
+    return { imported, errors };
+  });
 
   ipcMain.handle("auth:start", async () => {
     const login = await authService.beginLogin();

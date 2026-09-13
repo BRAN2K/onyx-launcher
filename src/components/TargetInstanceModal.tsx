@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Box, ChevronRight, PackagePlus, X } from "lucide-react";
 import { useI18n } from "../i18n";
@@ -15,6 +16,15 @@ export function TargetInstanceModal({
   onSelect: (instance: GameInstance) => void;
 }) {
   const { t } = useI18n();
+
+  useEffect(() => {
+    if (!project) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [project, onClose]);
   const compatible = instances.filter(
     (instance) =>
       instance.status === "ready" &&

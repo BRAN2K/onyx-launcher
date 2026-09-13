@@ -32,6 +32,8 @@ const colors: Array<[InstanceColor, TranslationKey]> = [
   ["rose", "instanceSettings.color.rose"],
 ];
 
+type SettingsTab = "general" | "java" | "display" | "advanced";
+
 export function InstanceSettingsModal({
   instance,
   globalSettings,
@@ -49,6 +51,7 @@ export function InstanceSettingsModal({
   ) => Promise<void>;
 }) {
   const { t } = useI18n();
+  const [activeTab, setActiveTab] = useState<SettingsTab>("general");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [color, setColor] = useState<InstanceColor>("lime");
@@ -100,6 +103,16 @@ export function InstanceSettingsModal({
       .then(setFpsRecorderStatus)
       .catch(() => undefined);
   }, [globalSettings, instance, t]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !busy) {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [busy, onClose]);
 
   const save = async () => {
     if (!instance || !name.trim()) return;
@@ -183,291 +196,332 @@ export function InstanceSettingsModal({
             <h2>{instance.id === "vanilla-start" && instance.name === "Pure Game" ? t("home.defaultName") : instance.name}</h2>
             <p className="modal__subtitle">{t("instanceSettings.subtitle")}</p>
 
-            <div className="instance-settings-scroll">
-              <section className="instance-settings-section">
-                <div className="instance-settings-section__title">
-                  <Palette size={15} />
-                  <div>
-                    <strong>{t("instanceSettings.appearance")}</strong>
-                    <small>{t("instanceSettings.appearanceHint")}</small>
-                  </div>
-                </div>
-                <label className="instance-setting-field">
-                  <span>{t("instanceSettings.name")}</span>
-                  <input
-                    value={name}
-                    maxLength={48}
-                    onChange={(event) => setName(event.target.value)}
-                  />
-                </label>
-                <label className="instance-setting-field">
-                  <span>{t("instanceSettings.description")}</span>
-                  <input
-                    value={description}
-                    maxLength={180}
-                    onChange={(event) => setDescription(event.target.value)}
-                  />
-                </label>
-                <div className="instance-color-picker">
-                  {colors.map(([id, label]) => (
-                    <button
-                      key={id}
-                      className={`is-${id} ${color === id ? "is-active" : ""}`}
-                      title={t(label)}
-                      onClick={() => setColor(id)}
-                    >
-                      {color === id && <Check size={12} />}
-                    </button>
-                  ))}
-                </div>
-              </section>
-
-              <section className="instance-settings-section">
-                <div className="instance-settings-section__title">
-                  <Server size={15} />
-                  <div>
-                    <strong>{t("instanceSettings.quickJoin")}</strong>
-                    <small>{t("instanceSettings.quickJoinHint")}</small>
-                  </div>
-                </div>
-                <label className="instance-setting-field">
-                  <span>{t("instanceSettings.serverAddress")}</span>
-                  <input
-                    value={serverAddress}
-                    maxLength={320}
-                    spellCheck={false}
-                    placeholder="play.example.org:25565"
-                    onChange={(event) => {
-                      setServerAddress(event.target.value);
-                      setServerStatus(null);
-                    }}
-                  />
-                  <small className="instance-setting-field__hint">
-                    {serverAddress
-                      ? t("instanceSettings.serverEnabled")
-                      : t("instanceSettings.serverDisabled")}
-                  </small>
-                </label>
-                <div className="server-status-row">
-                  <button
-                    className="button button--mini"
-                    disabled={!serverAddress.trim() || checkingServer}
-                    onClick={() => void checkServer()}
-                  >
-                    {checkingServer ? (
-                      <LoaderCircle className="spin" size={14} />
-                    ) : (
-                      <Globe2 size={14} />
-                    )}
-                    {t("instanceSettings.serverCheck")}
-                  </button>
-                  {serverStatus && (
-                    <div
-                      className={`server-status-result ${
-                        serverStatus.online ? "is-online" : "is-offline"
-                      }`}
-                    >
-                      <i />
-                      <div>
-                        <strong>
-                          {serverStatus.online
-                            ? t("instanceSettings.serverOnline", {
-                                latency: serverStatus.latencyMs ?? 0,
-                                online: serverStatus.playersOnline ?? 0,
-                                max: serverStatus.playersMax ?? 0,
-                              })
-                            : t("instanceSettings.serverOffline")}
-                        </strong>
-                        <small>
-                          {serverStatus.online
-                            ? [serverStatus.version, serverStatus.motd]
-                                .filter(Boolean)
-                                .join(" · ")
-                            : serverStatus.error ||
-                              t("instanceSettings.serverUnavailable")}
-                        </small>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </section>
-
-              <section
-                className="instance-settings-section"
-                data-capture-target="instance-performance-settings"
-              >
-                <div className="instance-settings-section__title">
-                  <Gauge size={15} />
-                  <div>
-                    <strong>{t("instanceSettings.performance")}</strong>
-                    <small>{t("instanceSettings.performanceHint")}</small>
-                  </div>
-                </div>
-                <div className="instance-memory">
-                  <div>
-                    <span>{t("instanceSettings.memory")}</span>
-                    <strong>{memory} GB</strong>
-                  </div>
-                  <input
-                    type="range"
-                    min="2"
-                    max="32"
-                    value={memory}
-                    onChange={(event) => setMemory(Number(event.target.value))}
-                    style={
-                      {
-                        "--range-value": `${((memory - 2) / 30) * 100}%`,
-                      } as React.CSSProperties
-                    }
-                  />
-                  {recommendation && (
-                    <div className="instance-autotune">
-                      <span>
-                        <WandSparkles size={15} />
-                      </span>
-                      <div>
-                        <strong>{t("instanceSettings.autotune")}</strong>
-                        <small>
-                          {t("instanceSettings.autotuneHint", {
-                            memory: recommendation.memoryGiB,
-                            java: recommendation.javaMajor,
-                            mods: recommendation.modCount,
-                            total: recommendation.totalMemoryGiB,
-                          })}
-                        </small>
-                      </div>
-                      <button
-                        className="button button--mini button--accent"
-                        disabled={memory === recommendation.memoryGiB}
-                        onClick={() =>
-                          setMemory(recommendation.memoryGiB)
-                        }
-                      >
-                        {memory === recommendation.memoryGiB
-                          ? t("instanceSettings.autotuneApplied")
-                          : t("instanceSettings.autotuneUse")}
-                      </button>
-                    </div>
-                  )}
-                </div>
+            <div className="modal-tabs">
+              {(
+                [
+                  ["general", Palette, t("instanceSettings.tab.general")],
+                  ["java", Coffee, t("instanceSettings.tab.java")],
+                  ["display", Monitor, t("instanceSettings.tab.display")],
+                  ["advanced", SlidersHorizontal, t("instanceSettings.tab.advanced")],
+                ] as const
+              ).map(([id, Icon, label]) => (
                 <button
+                  key={id}
                   type="button"
-                  role="switch"
-                  aria-checked={recordFps}
-                  data-capture-target="fps-recording-toggle"
-                  className={`fps-recording-toggle ${
-                    recordFps ? "is-on" : ""
-                  }`}
-                  onClick={() => setRecordFps((value) => !value)}
+                  className={`modal-tab ${activeTab === id ? "is-active" : ""}`}
+                  onClick={() => setActiveTab(id)}
                 >
-                  <span>
-                    <Activity size={16} />
-                  </span>
-                  <div>
-                    <strong>{t("instanceSettings.fpsRecording")}</strong>
-                    <small>
-                      {!fpsRecorderStatus
-                        ? t("instanceSettings.fpsChecking")
-                        : fpsRecorderStatus.available
-                          ? t("instanceSettings.fpsReady", {
-                              provider: fpsRecorderStatus.name || "FPS",
-                            })
-                          : t("instanceSettings.fpsUnavailable", {
-                              provider:
-                                fpsRecorderStatus.platform === "linux"
-                                  ? "MangoHud"
-                                  : "Onyx Probe",
-                            })}
-                    </small>
-                    {fpsRecorderStatus &&
-                      !fpsRecorderStatus.available &&
-                      fpsRecorderStatus.installHint && (
-                        <em>{fpsRecorderStatus.installHint}</em>
-                      )}
-                  </div>
-                  <i aria-hidden="true">
-                    <b />
-                  </i>
+                  <Icon size={14} />
+                  {label}
                 </button>
-                <div className="instance-java-row">
-                  <span>
-                    <Coffee size={15} />
-                  </span>
-                  <div>
-                    <strong>{t("instanceSettings.java")}</strong>
-                    <small>{javaPath || t("instanceSettings.javaAuto")}</small>
+              ))}
+            </div>
+
+            <div className="instance-settings-scroll">
+              {activeTab === "general" && (
+                <>
+                  <section className="instance-settings-section">
+                    <div className="instance-settings-section__title">
+                      <Palette size={15} />
+                      <div>
+                        <strong>{t("instanceSettings.appearance")}</strong>
+                        <small>{t("instanceSettings.appearanceHint")}</small>
+                      </div>
+                    </div>
+                    <label className="instance-setting-field">
+                      <span>{t("instanceSettings.name")}</span>
+                      <input
+                        value={name}
+                        maxLength={48}
+                        onChange={(event) => setName(event.target.value)}
+                      />
+                    </label>
+                    <label className="instance-setting-field">
+                      <span>{t("instanceSettings.description")}</span>
+                      <input
+                        value={description}
+                        maxLength={180}
+                        onChange={(event) => setDescription(event.target.value)}
+                      />
+                    </label>
+                    <div className="instance-color-picker">
+                      {colors.map(([id, label]) => (
+                        <button
+                          key={id}
+                          className={`is-${id} ${color === id ? "is-active" : ""}`}
+                          title={t(label)}
+                          onClick={() => setColor(id)}
+                        >
+                          {color === id && <Check size={12} />}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className="instance-settings-section">
+                    <div className="instance-settings-section__title">
+                      <Server size={15} />
+                      <div>
+                        <strong>{t("instanceSettings.quickJoin")}</strong>
+                        <small>{t("instanceSettings.quickJoinHint")}</small>
+                      </div>
+                    </div>
+                    <label className="instance-setting-field">
+                      <span>{t("instanceSettings.serverAddress")}</span>
+                      <input
+                        value={serverAddress}
+                        maxLength={320}
+                        spellCheck={false}
+                        placeholder="play.example.org:25565"
+                        onChange={(event) => {
+                          setServerAddress(event.target.value);
+                          setServerStatus(null);
+                        }}
+                      />
+                      <small className="instance-setting-field__hint">
+                        {serverAddress
+                          ? t("instanceSettings.serverEnabled")
+                          : t("instanceSettings.serverDisabled")}
+                      </small>
+                    </label>
+                    <div className="server-status-row">
+                      <button
+                        className="button button--mini"
+                        disabled={!serverAddress.trim() || checkingServer}
+                        onClick={() => void checkServer()}
+                      >
+                        {checkingServer ? (
+                          <LoaderCircle className="spin" size={14} />
+                        ) : (
+                          <Globe2 size={14} />
+                        )}
+                        {t("instanceSettings.serverCheck")}
+                      </button>
+                      {serverStatus && (
+                        <div
+                          className={`server-status-result ${
+                            serverStatus.online ? "is-online" : "is-offline"
+                          }`}
+                        >
+                          <i />
+                          <div>
+                            <strong>
+                              {serverStatus.online
+                                ? t("instanceSettings.serverOnline", {
+                                    latency: serverStatus.latencyMs ?? 0,
+                                    online: serverStatus.playersOnline ?? 0,
+                                    max: serverStatus.playersMax ?? 0,
+                                  })
+                                : t("instanceSettings.serverOffline")}
+                            </strong>
+                            <small>
+                              {serverStatus.online
+                                ? [serverStatus.version, serverStatus.motd]
+                                    .filter(Boolean)
+                                    .join(" · ")
+                                : serverStatus.error ||
+                                  t("instanceSettings.serverUnavailable")}
+                            </small>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </section>
+                </>
+              )}
+
+              {activeTab === "java" && (
+                <section
+                  className="instance-settings-section"
+                  data-capture-target="instance-performance-settings"
+                >
+                  <div className="instance-settings-section__title">
+                    <Gauge size={15} />
+                    <div>
+                      <strong>{t("instanceSettings.performance")}</strong>
+                      <small>{t("instanceSettings.performanceHint")}</small>
+                    </div>
                   </div>
-                  {javaPath && (
+                  <div className="instance-memory">
+                    <div>
+                      <span>{t("instanceSettings.memory")}</span>
+                      <strong>{memory} GB</strong>
+                    </div>
+                    <input
+                      type="range"
+                      min="2"
+                      max="32"
+                      value={memory}
+                      onChange={(event) => setMemory(Number(event.target.value))}
+                      style={
+                        {
+                          "--range-value": `${((memory - 2) / 30) * 100}%`,
+                        } as React.CSSProperties
+                      }
+                    />
+                    {recommendation && (
+                      <div className="instance-autotune">
+                        <span>
+                          <WandSparkles size={15} />
+                        </span>
+                        <div>
+                          <strong>{t("instanceSettings.autotune")}</strong>
+                          <small>
+                            {t("instanceSettings.autotuneHint", {
+                              memory: recommendation.memoryGiB,
+                              java: recommendation.javaMajor,
+                              mods: recommendation.modCount,
+                              total: recommendation.totalMemoryGiB,
+                            })}
+                          </small>
+                        </div>
+                        <button
+                          className="button button--mini button--accent"
+                          disabled={memory === recommendation.memoryGiB}
+                          onClick={() =>
+                            setMemory(recommendation.memoryGiB)
+                          }
+                        >
+                          {memory === recommendation.memoryGiB
+                            ? t("instanceSettings.autotuneApplied")
+                            : t("instanceSettings.autotuneUse")}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="instance-java-row" style={{ marginTop: 14 }}>
+                    <span>
+                      <Coffee size={15} />
+                    </span>
+                    <div>
+                      <strong>{t("instanceSettings.java")}</strong>
+                      <small>{javaPath || t("instanceSettings.javaAuto")}</small>
+                    </div>
+                    {javaPath && (
+                      <button
+                        className="button button--mini"
+                        onClick={() => setJavaPath("")}
+                      >
+                        {t("instanceSettings.reset")}
+                      </button>
+                    )}
                     <button
                       className="button button--mini"
-                      onClick={() => setJavaPath("")}
+                      onClick={async () => {
+                        const selected = await window.onyx.system.chooseJava();
+                        if (selected) setJavaPath(selected);
+                      }}
                     >
-                      {t("instanceSettings.reset")}
+                      {t("instanceSettings.choose")}
                     </button>
-                  )}
-                  <button
-                    className="button button--mini"
-                    onClick={async () => {
-                      const selected = await window.onyx.system.chooseJava();
-                      if (selected) setJavaPath(selected);
-                    }}
-                  >
-                    {t("instanceSettings.choose")}
-                  </button>
-                </div>
-                <label className="instance-setting-field">
-                  <span>{t("instanceSettings.jvm")}</span>
-                  <textarea
-                    value={jvmArguments}
-                    rows={3}
-                    spellCheck={false}
-                    placeholder={"-XX:+UseStringDeduplication\n-Dexample=true"}
-                    onChange={(event) => setJvmArguments(event.target.value)}
-                  />
-                </label>
-              </section>
-
-              <section className="instance-settings-section">
-                <div className="instance-settings-section__title">
-                  <Monitor size={15} />
-                  <div>
-                    <strong>{t("instanceSettings.window")}</strong>
-                    <small>{t("instanceSettings.windowHint")}</small>
                   </div>
-                </div>
-                <div className="resolution-fields">
-                  <label className="instance-setting-field">
-                    <span>{t("instanceSettings.width")}</span>
-                    <input
-                      type="number"
-                      min={640}
-                      max={7680}
-                      value={width}
-                      onChange={(event) => setWidth(Number(event.target.value))}
-                    />
-                  </label>
-                  <i>×</i>
-                  <label className="instance-setting-field">
-                    <span>{t("instanceSettings.height")}</span>
-                    <input
-                      type="number"
-                      min={480}
-                      max={4320}
-                      value={height}
-                      onChange={(event) => setHeight(Number(event.target.value))}
-                    />
-                  </label>
+                </section>
+              )}
+
+              {activeTab === "display" && (
+                <section className="instance-settings-section">
+                  <div className="instance-settings-section__title">
+                    <Monitor size={15} />
+                    <div>
+                      <strong>{t("instanceSettings.window")}</strong>
+                      <small>{t("instanceSettings.windowHint")}</small>
+                    </div>
+                  </div>
+                  <div className="resolution-fields">
+                    <label className="instance-setting-field">
+                      <span>{t("instanceSettings.width")}</span>
+                      <input
+                        type="number"
+                        min={640}
+                        max={7680}
+                        value={width}
+                        onChange={(event) => setWidth(Number(event.target.value))}
+                      />
+                    </label>
+                    <i>×</i>
+                    <label className="instance-setting-field">
+                      <span>{t("instanceSettings.height")}</span>
+                      <input
+                        type="number"
+                        min={480}
+                        max={4320}
+                        value={height}
+                        onChange={(event) => setHeight(Number(event.target.value))}
+                      />
+                    </label>
+                    <button
+                      role="switch"
+                      aria-checked={fullscreen}
+                      className={`fullscreen-toggle ${fullscreen ? "is-on" : ""}`}
+                      onClick={() => setFullscreen((value) => !value)}
+                    >
+                      <i />
+                      <span>{t("instanceSettings.fullscreen")}</span>
+                    </button>
+                  </div>
+                </section>
+              )}
+
+              {activeTab === "advanced" && (
+                <section className="instance-settings-section">
+                  <div className="instance-settings-section__title">
+                    <SlidersHorizontal size={15} />
+                    <div>
+                      <strong>{t("instanceSettings.tab.advanced")}</strong>
+                      <small>{t("instanceSettings.subtitle")}</small>
+                    </div>
+                  </div>
                   <button
+                    type="button"
                     role="switch"
-                    aria-checked={fullscreen}
-                    className={`fullscreen-toggle ${fullscreen ? "is-on" : ""}`}
-                    onClick={() => setFullscreen((value) => !value)}
+                    aria-checked={recordFps}
+                    data-capture-target="fps-recording-toggle"
+                    className={`fps-recording-toggle ${
+                      recordFps ? "is-on" : ""
+                    }`}
+                    onClick={() => setRecordFps((value) => !value)}
                   >
-                    <i />
-                    <span>{t("instanceSettings.fullscreen")}</span>
+                    <span>
+                      <Activity size={16} />
+                    </span>
+                    <div>
+                      <strong>{t("instanceSettings.fpsRecording")}</strong>
+                      <small>
+                        {!fpsRecorderStatus
+                          ? t("instanceSettings.fpsChecking")
+                          : fpsRecorderStatus.available
+                            ? t("instanceSettings.fpsReady", {
+                                provider: fpsRecorderStatus.name || "FPS",
+                              })
+                            : t("instanceSettings.fpsUnavailable", {
+                                provider:
+                                  fpsRecorderStatus.platform === "linux"
+                                    ? "MangoHud"
+                                    : "Onyx Probe",
+                              })}
+                      </small>
+                      {fpsRecorderStatus &&
+                        !fpsRecorderStatus.available &&
+                        fpsRecorderStatus.installHint && (
+                          <em>{fpsRecorderStatus.installHint}</em>
+                        )}
+                    </div>
+                    <i aria-hidden="true">
+                      <b />
+                    </i>
                   </button>
-                </div>
-              </section>
+                  <label className="instance-setting-field" style={{ marginTop: 14 }}>
+                    <span>{t("instanceSettings.jvm")}</span>
+                    <textarea
+                      value={jvmArguments}
+                      rows={4}
+                      spellCheck={false}
+                      placeholder={"-XX:+UseStringDeduplication\n-Dexample=true"}
+                      onChange={(event) => setJvmArguments(event.target.value)}
+                    />
+                  </label>
+                </section>
+              )}
             </div>
 
             {error && <div className="auth-error">{error}</div>}

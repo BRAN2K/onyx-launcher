@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Box,
@@ -16,6 +16,12 @@ import type {
   MinecraftVersion,
   NewInstanceInput,
 } from "../types";
+
+const PRESETS = [
+  { id: "fabric", label: "Fabric 1.21.1", version: "1.21.1", loader: "Fabric" },
+  { id: "neoforge", label: "NeoForge 1.21.1", version: "1.21.1", loader: "NeoForge" },
+  { id: "vanilla", label: "Vanilla 1.21.4", version: "1.21.4", loader: "Vanilla" },
+];
 
 interface CreateInstanceModalProps {
   open: boolean;
@@ -36,6 +42,17 @@ export function CreateInstanceModal({
   const [loader, setLoader] = useState("Fabric");
   const [color, setColor] = useState<InstanceColor>("lime");
   const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
 
   const valid = useMemo(() => name.trim().length >= 2, [name]);
 
@@ -115,6 +132,28 @@ export function CreateInstanceModal({
                 <small>{name.length}/48</small>
               </div>
             </label>
+
+            <div className="create-presets">
+              <span className="create-presets__label">{t("create.quickPresets")}</span>
+              <div className="create-presets__list">
+                {PRESETS.map((preset) => {
+                  const isSelected = version === preset.version && loader === preset.loader;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      className={`create-preset-btn ${isSelected ? "is-active" : ""}`}
+                      onClick={() => {
+                        setVersion(preset.version);
+                        setLoader(preset.loader);
+                      }}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             <div className="field-row">
               <label className="field">

@@ -1,10 +1,8 @@
 import { motion } from "framer-motion";
 import {
   ChevronDown,
-  ChevronRight,
   CircleUserRound,
   Settings,
-  Sparkles,
 } from "lucide-react";
 import { navigation } from "../data";
 import { useI18n } from "../i18n";
@@ -62,20 +60,6 @@ export function Sidebar({
           );
         })}
       </div>
-
-      <button
-        className={`pro-card ${activeRoute === "picks" ? "is-active" : ""}`}
-        onClick={() => onNavigate("picks")}
-      >
-        <span className="pro-card__icon">
-          <Sparkles size={16} />
-        </span>
-        <span className="pro-card__copy">
-          <strong>{t("nav.picks")}</strong>
-          <small>{t("nav.picks.subtitle")}</small>
-        </span>
-        <ChevronRight size={15} />
-      </button>
 
       <div className="sidebar__footer">
         <button

@@ -11,7 +11,6 @@ import {
   Plus,
   Search,
   Settings,
-  Sparkles,
   X,
 } from "lucide-react";
 import { useI18n, type TranslationKey } from "../i18n";
@@ -44,12 +43,6 @@ const commands: Array<{
     titleKey: "nav.discover",
     hintKey: "command.discoverHint",
     icon: Compass,
-  },
-  {
-    id: "picks",
-    titleKey: "nav.picks",
-    hintKey: "command.picksHint",
-    icon: Sparkles,
   },
   {
     id: "downloads",

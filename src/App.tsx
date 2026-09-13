@@ -12,6 +12,7 @@ import {
   type ActiveLaunch,
 } from "./components/LauncherOverlay";
 import { OnboardingModal } from "./components/OnboardingModal";
+import { MigrationModal } from "./components/MigrationModal";
 import {
   MaintenancePill,
   type MaintenanceState,
@@ -52,11 +53,6 @@ const DiscoverPage = lazy(() =>
     default: module.DiscoverPage,
   })),
 );
-const PicksPage = lazy(() =>
-  import("./pages/PicksPage").then((module) => ({
-    default: module.PicksPage,
-  })),
-);
 const DownloadsPage = lazy(() =>
   import("./pages/DownloadsPage").then((module) => ({
     default: module.DownloadsPage,
@@ -89,6 +85,7 @@ export default function App() {
   );
   const [versions, setVersions] = useState<MinecraftVersion[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
+  const [migrationOpen, setMigrationOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [instanceMenu, setInstanceMenu] = useState<GameInstance | null>(null);
@@ -1079,6 +1076,7 @@ export default function App() {
           <LibraryPage
             instances={state.instances}
             onCreate={() => setCreateOpen(true)}
+            onMigrate={() => setMigrationOpen(true)}
             onImport={() => void importPack()}
             onImportBackup={() => void importBackup()}
             onImportSync={() => void importSyncProfile()}
@@ -1098,6 +1096,7 @@ export default function App() {
             <LibraryPage
               instances={state.instances}
               onCreate={() => setCreateOpen(true)}
+              onMigrate={() => setMigrationOpen(true)}
               onImport={() => void importPack()}
               onImportBackup={() => void importBackup()}
               onImportSync={() => void importSyncProfile()}
@@ -1140,15 +1139,6 @@ export default function App() {
             versions={versions}
             onInstall={(project) => void installProject(project)}
             onNavigate={setRoute}
-          />
-        );
-      case "picks":
-        return (
-          <PicksPage
-            downloads={state.downloads}
-            allocatedMemory={state.settings.memory}
-            onInstall={(project) => void installProject(project)}
-            onExplore={() => setRoute("discover")}
           />
         );
       case "downloads":
@@ -1245,6 +1235,18 @@ export default function App() {
         onClose={() => setCreateOpen(false)}
         onCreate={createInstance}
         availableVersions={versions}
+      />
+      <MigrationModal
+        open={migrationOpen}
+        onClose={() => setMigrationOpen(false)}
+        onSuccess={() => {
+          pushToast(
+            "success",
+            t("migration.successTitle"),
+            t("migration.successText", { count: 1 }),
+          );
+          void refreshState();
+        }}
       />
       <CommandPalette
         open={commandOpen}

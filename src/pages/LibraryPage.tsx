@@ -1,13 +1,16 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArchiveRestore,
   ArrowDownAZ,
+  ChevronDown,
+  Download,
   Grid2X2,
   List,
   PackageOpen,
   PackagePlus,
   Plus,
+  Rocket,
   Search,
   Share2,
   SlidersHorizontal,
@@ -19,6 +22,7 @@ import type { GameInstance } from "../types";
 interface LibraryPageProps {
   instances: GameInstance[];
   onCreate: () => void;
+  onMigrate: () => void;
   onPlay: (instance: GameInstance) => void;
   onFavorite: (instance: GameInstance) => void;
   onMenu: (instance: GameInstance) => void;
@@ -34,6 +38,7 @@ type Filter = "all" | "fabric" | "forge" | "neoforge" | "quilt" | "vanilla" | "f
 export function LibraryPage({
   instances,
   onCreate,
+  onMigrate,
   onPlay,
   onFavorite,
   onMenu,
@@ -48,6 +53,21 @@ export function LibraryPage({
   const [filter, setFilter] = useState<Filter>("all");
   const [compact, setCompact] = useState(false);
   const [sortAscending, setSortAscending] = useState(true);
+  const [importMenuOpen, setImportMenuOpen] = useState(false);
+  const importMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        importMenuRef.current &&
+        !importMenuRef.current.contains(event.target as Node)
+      ) {
+        setImportMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const filtered = useMemo(() => {
     return instances
@@ -91,21 +111,76 @@ export function LibraryPage({
           <p>{t("library.count", { count: instances.length })}</p>
         </div>
         <div className="page-heading__actions">
-          <button className="button button--secondary" onClick={onImportSync}>
-            <Share2 size={16} />
-            {t("library.syncImport")}
-          </button>
-          <button className="button button--secondary" onClick={onImportBackup}>
-            <ArchiveRestore size={16} />
-            {t("library.restore")}
-          </button>
-          <button className="button button--secondary" onClick={onImport}>
-            <PackagePlus size={16} />
-            {t("library.import")}
-          </button>
+          <div className="dropdown-wrapper" ref={importMenuRef}>
+            <button
+              className="button button--secondary"
+              onClick={() => setImportMenuOpen((prev) => !prev)}
+            >
+              <Download size={15} />
+              <span>{t("library.importMenu")}</span>
+              <ChevronDown size={14} />
+            </button>
+            {importMenuOpen && (
+              <div className="dropdown-menu dropdown-menu--right">
+                <button
+                  className="dropdown-item"
+                  onClick={() => {
+                    setImportMenuOpen(false);
+                    onMigrate();
+                  }}
+                >
+                  <Rocket size={15} />
+                  <div>
+                    <strong>{t("migration.headerButton")}</strong>
+                    <small>CurseForge, Prism, Modrinth, Vanilla</small>
+                  </div>
+                </button>
+                <button
+                  className="dropdown-item"
+                  onClick={() => {
+                    setImportMenuOpen(false);
+                    onImport();
+                  }}
+                >
+                  <PackagePlus size={15} />
+                  <div>
+                    <strong>{t("library.import")}</strong>
+                    <small>.mrpack, .zip</small>
+                  </div>
+                </button>
+                <button
+                  className="dropdown-item"
+                  onClick={() => {
+                    setImportMenuOpen(false);
+                    onImportBackup();
+                  }}
+                >
+                  <ArchiveRestore size={15} />
+                  <div>
+                    <strong>{t("library.restore")}</strong>
+                    <small>.tar.gz backup</small>
+                  </div>
+                </button>
+                <button
+                  className="dropdown-item"
+                  onClick={() => {
+                    setImportMenuOpen(false);
+                    onImportSync();
+                  }}
+                >
+                  <Share2 size={15} />
+                  <div>
+                    <strong>{t("library.syncImport")}</strong>
+                    <small>Friend code</small>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
+
           <button className="button button--primary" onClick={onCreate}>
-            <Plus size={17} />
-            {t("library.create")}
+            <Plus size={16} />
+            <span>{t("library.create")}</span>
           </button>
         </div>
       </div>
@@ -204,9 +279,25 @@ export function LibraryPage({
           </span>
           <h2>{t("library.empty")}</h2>
           <p>{t("library.emptyHint")}</p>
-          <button className="button button--secondary" onClick={onCreate}>
-            <Plus size={16} /> {t("library.create")}
-          </button>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", justifyContent: "center" }}>
+            <button className="button button--secondary" onClick={onCreate}>
+              <Plus size={16} /> {t("library.create")}
+            </button>
+            <button className="button button--secondary" onClick={onMigrate}>
+              <Rocket size={16} /> {t("migration.headerButton")}
+            </button>
+          </div>
+
+          <div className="migration-banner">
+            <div className="migration-banner__info">
+              <h4>{t("migration.banner.title")}</h4>
+              <p>{t("migration.banner.description")}</p>
+            </div>
+            <button className="button button--primary" onClick={onMigrate}>
+              <Rocket size={15} />
+              {t("migration.banner.button")}
+            </button>
+          </div>
         </div>
       )}
     </motion.div>

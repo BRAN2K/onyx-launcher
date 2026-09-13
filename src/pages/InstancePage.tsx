@@ -32,6 +32,7 @@ import {
   Layers3,
   LoaderCircle,
   MemoryStick,
+  MoreHorizontal,
   Package,
   Pin,
   Play,
@@ -76,9 +77,14 @@ import "./InstancePage.css";
 type InstanceTab =
   | "overview"
   | "content"
-  | "screenshots"
   | "servers"
+  | "screenshots"
+  | "diagnostics";
+type DiagnosticSubTab =
   | "performance"
+  | "bisect"
+  | "storage"
+  | "snapshots"
   | "activity";
 type ContentKind = "mods" | "resourcepacks" | "shaderpacks";
 
@@ -155,6 +161,11 @@ export function InstancePage({
 }: InstancePageProps) {
   const { locale, t } = useI18n();
   const [tab, setTab] = useState<InstanceTab>("overview");
+  const [diagnosticTab, setDiagnosticTab] =
+    useState<DiagnosticSubTab>("performance");
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [profilesOpen, setProfilesOpen] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
   const [servers, setServers] = useState<InstanceServer[]>([]);
   const [selectedServerId, setSelectedServerId] = useState("");
   const [serverName, setServerName] = useState("");
@@ -482,20 +493,39 @@ export function InstancePage({
   }, [instance.id, onNotify, t]);
 
   useEffect(() => {
+    if (!moreMenuOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (
+        moreMenuRef.current &&
+        !moreMenuRef.current.contains(e.target as Node)
+      ) {
+        setMoreMenuOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", handleClick);
+    return () => window.removeEventListener("mousedown", handleClick);
+  }, [moreMenuOpen]);
+
+  useEffect(() => {
     if (tab === "content") void loadContent(false);
   }, [loadContent, tab]);
 
   useEffect(() => {
-    if (tab === "overview") void loadStorage();
-  }, [loadStorage, tab]);
+    if (tab === "diagnostics" && diagnosticTab === "storage") void loadStorage();
+  }, [diagnosticTab, loadStorage, tab]);
 
   useEffect(() => {
-    if (tab !== "performance" || fpsRecorderStatus) return;
+    if (
+      tab !== "diagnostics" ||
+      diagnosticTab !== "performance" ||
+      fpsRecorderStatus
+    )
+      return;
     void window.onyx.system
       .fpsRecorderStatus()
       .then(setFpsRecorderStatus)
       .catch(() => undefined);
-  }, [fpsRecorderStatus, tab]);
+  }, [diagnosticTab, fpsRecorderStatus, tab]);
 
   const persistServers = async (
     nextServers: InstanceServer[],
@@ -1167,7 +1197,7 @@ export function InstancePage({
         {t("instancePage.back")}
       </button>
 
-      <section className="instance-hero">
+      <section className={`instance-hero ${moreMenuOpen ? "is-menu-open" : ""}`}>
         <div className="instance-hero__grid" />
         <div className="instance-hero__identity">
           <span className="instance-hero__icon">
@@ -1189,13 +1219,77 @@ export function InstancePage({
         <div className="instance-hero__actions">
           <button
             className="button button--secondary"
-            onClick={() => onCheck(instance)}
+            title={t("instancePage.actions.settings")}
+            onClick={() => onSettings(instance)}
           >
-            <ShieldCheck size={16} />
-            {t("instancePage.guard")}
+            <Settings2 size={16} />
+            {t("instancePage.actions.settings")}
           </button>
           <button
-            className="button button--primary"
+            className="button button--secondary"
+            title={t("instancePage.actions.folder")}
+            onClick={() => onOpenFolder(instance)}
+          >
+            <FolderOpen size={16} />
+            {t("instancePage.actions.folder")}
+          </button>
+          <div className="dropdown-wrapper" ref={moreMenuRef}>
+            <button
+              className={`button button--secondary ${
+                moreMenuOpen ? "is-active" : ""
+              }`}
+              onClick={() => setMoreMenuOpen(!moreMenuOpen)}
+              title={t("instancePage.actions.more")}
+            >
+              <MoreHorizontal size={16} />
+            </button>
+            {moreMenuOpen && (
+              <div className="dropdown-menu dropdown-menu--right">
+                <button
+                  className="dropdown-item"
+                  onClick={() => {
+                    setMoreMenuOpen(false);
+                    onCheck(instance);
+                  }}
+                >
+                  <ShieldCheck size={15} />
+                  <span>{t("instancePage.guard")}</span>
+                </button>
+                <button
+                  className="dropdown-item"
+                  onClick={() => {
+                    setMoreMenuOpen(false);
+                    onLogs(instance);
+                  }}
+                >
+                  <History size={15} />
+                  <span>{t("instancePage.actions.logs")}</span>
+                </button>
+                <button
+                  className="dropdown-item"
+                  onClick={() => {
+                    setMoreMenuOpen(false);
+                    onBackup(instance);
+                  }}
+                >
+                  <Archive size={15} />
+                  <span>{t("instancePage.actions.backup")}</span>
+                </button>
+                <button
+                  className="dropdown-item"
+                  onClick={() => {
+                    setMoreMenuOpen(false);
+                    onExportSync(instance);
+                  }}
+                >
+                  <Share2 size={15} />
+                  <span>{t("instancePage.actions.sync")}</span>
+                </button>
+              </div>
+            )}
+          </div>
+          <button
+            className="button button--primary instance-hero__play"
             disabled={instance.status === "installing"}
             onClick={() => onPlay(instance)}
           >
@@ -1216,10 +1310,9 @@ export function InstancePage({
           [
             ["overview", Gauge, t("instancePage.tab.overview")],
             ["content", Package, t("instancePage.tab.content")],
-            ["screenshots", Camera, t("instancePage.tab.screenshots")],
             ["servers", Server, t("instancePage.tab.servers")],
-            ["performance", Activity, t("instancePage.tab.performance")],
-            ["activity", History, t("instancePage.tab.activity")],
+            ["screenshots", Camera, t("instancePage.tab.screenshots")],
+            ["diagnostics", Activity, t("instancePage.tab.diagnostics")],
           ] as const
         ).map(([id, Icon, label]) => (
           <button
@@ -1238,8 +1331,10 @@ export function InstancePage({
             {id === "servers" && servers.length > 0 && (
               <small>{servers.length}</small>
             )}
-            {id === "performance" && recordedSessions.length > 0 && (
-              <small>{recordedSessions.length}</small>
+            {id === "diagnostics" && (
+              <small>
+                {recordedSessions.length + worldSnapshots.length + (bisect ? 1 : 0)}
+              </small>
             )}
           </button>
         ))}
@@ -1457,7 +1552,10 @@ export function InstancePage({
                 </div>
                 <button
                   className="button button--mini"
-                  onClick={() => setTab("activity")}
+                  onClick={() => {
+                    setTab("diagnostics");
+                    setDiagnosticTab("activity");
+                  }}
                 >
                   {t("instancePage.showAll")}
                 </button>
@@ -1478,270 +1576,44 @@ export function InstancePage({
               )}
             </section>
 
-            <section className="instance-section instance-world-guard">
-              <div className="instance-section__head">
-                <div>
-                  <p>{t("instancePage.worlds.eyebrow")}</p>
-                  <h2>{t("instancePage.worlds.title")}</h2>
+            {screenshots.length > 0 && (
+              <section className="instance-section instance-screenshots-preview">
+                <div className="instance-section__head">
+                  <div>
+                    <p>{t("instancePage.tab.screenshots")}</p>
+                    <h2>{t("instancePage.tab.screenshots")}</h2>
+                  </div>
+                  <button
+                    className="button button--mini"
+                    onClick={() => setTab("screenshots")}
+                  >
+                    <Camera size={14} />
+                    {t("instancePage.showAll")}
+                  </button>
                 </div>
-                <button
-                  className="button button--mini"
-                  disabled={worldBusy || instance.status === "running"}
-                  onClick={() => void createWorldSnapshot()}
-                >
-                  {worldBusy ? (
-                    <LoaderCircle className="spin" size={14} />
-                  ) : (
-                    <Archive size={14} />
-                  )}
-                  {t("instancePage.worlds.create")}
-                </button>
-              </div>
-              <p className="instance-world-guard__hint">
-                <ShieldCheck size={15} />
-                {t("instancePage.worlds.hint")}
-              </p>
-              {worldSnapshots.length ? (
-                <div className="instance-world-list">
-                  {worldSnapshots.slice(0, 3).map((snapshot) => (
-                    <div className="instance-world-row" key={snapshot.id}>
-                      <span>
-                        <Archive size={15} />
-                      </span>
-                      <div>
-                        <strong>
-                          {worldReason(snapshot.reason, t)}
-                        </strong>
-                        <small>
-                          {new Intl.DateTimeFormat(locale, {
-                            dateStyle: "medium",
-                            timeStyle: "short",
-                          }).format(new Date(snapshot.createdAt))}
-                          {" · "}
-                          {t("instancePage.worlds.count", {
-                            count: snapshot.worlds.length,
-                          })}
-                          {" · "}
-                          {formatBytes(snapshot.bytes, locale)}
-                        </small>
-                      </div>
-                      <button
-                        className={`button button--mini ${
-                          restoreSnapshotId === snapshot.id
-                            ? "button--danger"
-                            : ""
-                        }`}
-                        disabled={
-                          worldBusy || instance.status === "running"
-                        }
-                        onClick={() =>
-                          void restoreWorldSnapshot(snapshot)
-                        }
-                      >
-                        <RotateCcw size={13} />
-                        {restoreSnapshotId === snapshot.id
-                          ? t("instancePage.worlds.confirm")
-                          : t("instancePage.worlds.restore")}
-                      </button>
+                <div className="instance-screenshots-preview__grid">
+                  {screenshots.slice(0, 3).map((s) => (
+                    <div
+                      key={s.name}
+                      className="instance-screenshots-preview__thumb"
+                      onClick={() => {
+                        setActiveScreenshot(s);
+                        setTab("screenshots");
+                      }}
+                    >
+                      <ScreenshotPreviewThumb
+                        instanceId={instance.id}
+                        name={s.name}
+                      />
+                      <span>{s.name}</span>
                     </div>
                   ))}
                 </div>
-              ) : (
-                <EmptyLine text={t("instancePage.worlds.noSnapshots")} />
-              )}
-            </section>
+              </section>
+            )}
           </div>
 
           <aside className="instance-overview__side">
-            <section className="instance-section">
-              <div className="instance-section__head">
-                <div>
-                  <p>{t("instancePage.quick.eyebrow")}</p>
-                  <h2>{t("instancePage.quick.title")}</h2>
-                </div>
-              </div>
-              <div className="instance-quick-actions">
-                <QuickAction
-                  icon={Package}
-                  label={t("instancePage.quick.content")}
-                  onClick={() => setTab("content")}
-                />
-                <QuickAction
-                  icon={Server}
-                  label={t("instancePage.quick.servers")}
-                  onClick={() => setTab("servers")}
-                />
-                <QuickAction
-                  icon={Settings2}
-                  label={t("instancePage.quick.settings")}
-                  captureTarget="instance-settings"
-                  onClick={() => onSettings(instance)}
-                />
-                <QuickAction
-                  icon={FolderOpen}
-                  label={t("instancePage.quick.folder")}
-                  onClick={() => onOpenFolder(instance)}
-                />
-                <QuickAction
-                  icon={Archive}
-                  label={t("instancePage.quick.backup")}
-                  onClick={() => onBackup(instance)}
-                />
-                <QuickAction
-                  icon={History}
-                  label={t("instancePage.quick.logs")}
-                  onClick={() => onLogs(instance)}
-                />
-                <QuickAction
-                  icon={Share2}
-                  label={t("instancePage.quick.sync")}
-                  onClick={() => onExportSync(instance)}
-                />
-              </div>
-            </section>
-
-            <section className="instance-section instance-storage">
-              <div className="instance-section__head">
-                <div>
-                  <p>{t("instancePage.storage.eyebrow")}</p>
-                  <h2>{t("instancePage.storage.title")}</h2>
-                </div>
-                <button
-                  className="icon-button icon-button--quiet"
-                  aria-label={t("instancePage.storage.refresh")}
-                  title={t("instancePage.storage.refresh")}
-                  disabled={storageBusy}
-                  onClick={() => void loadStorage(true)}
-                >
-                  <RefreshCw
-                    className={storageBusy ? "spin" : ""}
-                    size={14}
-                  />
-                </button>
-              </div>
-              {storageBusy && !storageReport ? (
-                <div className="instance-storage__loading">
-                  <LoaderCircle className="spin" size={16} />
-                  {t("instancePage.storage.loading")}
-                </div>
-              ) : storageReport ? (
-                <>
-                  <div className="instance-storage__total">
-                    <span>
-                      <HardDrive size={18} />
-                    </span>
-                    <div>
-                      <strong>
-                        {formatBytes(storageReport.totalBytes, locale)}
-                      </strong>
-                      <small>
-                        {t("instancePage.storage.files", {
-                          files: storageReport.totalFiles,
-                          folders: storageReport.totalDirectories,
-                        })}
-                      </small>
-                    </div>
-                  </div>
-                  {storageReport.totalBytes > 0 && (
-                    <div
-                      className="instance-storage__bar"
-                      aria-label={t("instancePage.storage.breakdown")}
-                    >
-                      {storageReport.categories
-                        .filter((category) => category.bytes > 0)
-                        .map((category) => (
-                          <span
-                            className={`is-${category.id}`}
-                            key={category.id}
-                            title={`${t(
-                              STORAGE_CATEGORY_LABELS[category.id],
-                            )}: ${formatBytes(category.bytes, locale)}`}
-                            style={{
-                              width: `${
-                                (category.bytes /
-                                  storageReport.totalBytes) *
-                                100
-                              }%`,
-                            }}
-                          />
-                        ))}
-                    </div>
-                  )}
-                  <div className="instance-storage__categories">
-                    {storageReport.categories
-                      .slice()
-                      .sort((left, right) => right.bytes - left.bytes)
-                      .slice(0, 6)
-                      .map((category) => (
-                        <div key={category.id}>
-                          <i className={`is-${category.id}`} />
-                          <span>
-                            {t(STORAGE_CATEGORY_LABELS[category.id])}
-                          </span>
-                          <strong>
-                            {formatBytes(category.bytes, locale)}
-                          </strong>
-                        </div>
-                      ))}
-                  </div>
-                  <div
-                    className={`instance-storage__cleanup ${
-                      storageReport.cleanable.files > 0
-                        ? "has-files"
-                        : ""
-                    }`}
-                  >
-                    <div>
-                      <strong>
-                        {storageReport.cleanable.files > 0
-                          ? t("instancePage.storage.cleanable", {
-                              size: formatBytes(
-                                storageReport.cleanable.bytes,
-                                locale,
-                              ),
-                            })
-                          : t("instancePage.storage.clean")}
-                      </strong>
-                      <small>
-                        {storageReport.cleanable.files > 0
-                          ? t("instancePage.storage.cleanableHint", {
-                              files: storageReport.cleanable.files,
-                            })
-                          : t("instancePage.storage.cleanHint")}
-                      </small>
-                    </div>
-                    {storageReport.cleanable.files > 0 && (
-                      <button
-                        className={`button button--mini ${
-                          storageCleanupConfirm ? "button--danger" : ""
-                        }`}
-                        disabled={
-                          storageBusy || instance.status === "running"
-                        }
-                        onClick={() => void cleanupStorage()}
-                      >
-                        {storageBusy ? (
-                          <LoaderCircle className="spin" size={13} />
-                        ) : (
-                          <Trash2 size={13} />
-                        )}
-                        {storageCleanupConfirm
-                          ? t("instancePage.storage.confirm")
-                          : t("instancePage.storage.cleanup")}
-                      </button>
-                    )}
-                  </div>
-                  {storageReport.inaccessible > 0 && (
-                    <small className="instance-storage__warning">
-                      <CircleAlert size={12} />
-                      {t("instancePage.storage.inaccessible", {
-                        count: storageReport.inaccessible,
-                      })}
-                    </small>
-                  )}
-                </>
-              ) : null}
-            </section>
 
             <section className="instance-section instance-server-spotlight">
               <div className="instance-section__head">
@@ -1965,17 +1837,41 @@ export function InstancePage({
             </div>
             <div className="instance-content-head-actions">
               {contentKind === "mods" && (
-                <button
-                  className="button button--mini"
-                  disabled={contentBusy}
-                  onClick={() => void loadContent(true)}
-                >
-                  <RefreshCw size={14} />
-                  {t("instancePage.content.check")}
-                  {updates > 0 && <i>{updates}</i>}
-                </button>
+                <>
+                  <button
+                    className={`button button--mini ${
+                      profilesOpen ? "button--secondary is-active" : "button--secondary"
+                    }`}
+                    onClick={() => setProfilesOpen(!profilesOpen)}
+                    title={t("instancePage.profiles.toggle")}
+                  >
+                    <Layers3 size={14} />
+                    {t("instancePage.profiles.toggle")}
+                    {modProfiles.length > 0 && <small>{modProfiles.length}</small>}
+                  </button>
+                  <button
+                    className="button button--mini"
+                    disabled={contentBusy}
+                    onClick={() => void loadContent(true)}
+                  >
+                    <RefreshCw size={14} />
+                    {t("instancePage.content.check")}
+                    {updates > 0 && <i>{updates}</i>}
+                  </button>
+                </>
               )}
-              <button className="button button--mini" onClick={onDiscover}>
+              <button
+                className="button button--mini"
+                onClick={() => onOpenFolder(instance)}
+                title={t("instancePage.actions.folder")}
+              >
+                <FolderOpen size={14} />
+                {t("instancePage.actions.folder")}
+              </button>
+              <button
+                className="button button--mini button--accent"
+                onClick={onDiscover}
+              >
                 <Plus size={14} />
                 {t("instancePage.content.add")}
               </button>
@@ -2012,7 +1908,7 @@ export function InstancePage({
               />
             </label>
           </div>
-          {contentKind === "mods" && (
+          {contentKind === "mods" && profilesOpen && (
             <section className="instance-mod-profiles">
               <div className="instance-mod-profiles__head">
                 <span>
@@ -2172,117 +2068,6 @@ export function InstancePage({
               )}
             </section>
           )}
-          {contentKind === "mods" && (
-            <section
-              className={`instance-bisect ${
-                bisect ? "is-active" : ""
-              }`}
-            >
-              <span className="instance-bisect__icon">
-                <GitBranch size={19} />
-              </span>
-              {!bisect ? (
-                <>
-                  <div className="instance-bisect__copy">
-                    <strong>{t("instancePage.bisect.title")}</strong>
-                    <p>{t("instancePage.bisect.description")}</p>
-                  </div>
-                  <button
-                    className="button button--mini"
-                    disabled={
-                      bisectBusy ||
-                      instance.status === "running" ||
-                      content.filter((item) => item.enabled).length < 2
-                    }
-                    onClick={() => void startBisectFlow()}
-                  >
-                    {bisectBusy ? (
-                      <LoaderCircle className="spin" size={14} />
-                    ) : (
-                      <Bug size={14} />
-                    )}
-                    {t("instancePage.bisect.start")}
-                  </button>
-                </>
-              ) : bisect.status === "found" ? (
-                <>
-                  <div className="instance-bisect__copy">
-                    <small>{t("instancePage.bisect.foundEyebrow")}</small>
-                    <strong>{bisect.culprit}</strong>
-                    <p>{t("instancePage.bisect.foundHint")}</p>
-                  </div>
-                  <div className="instance-bisect__actions">
-                    <button
-                      className="button button--mini button--accent"
-                      disabled={bisectBusy}
-                      onClick={() => void finishBisectFlow(true)}
-                    >
-                      <Bug size={14} />
-                      {t("instancePage.bisect.disable")}
-                    </button>
-                    <button
-                      className="button button--mini"
-                      disabled={bisectBusy}
-                      onClick={() => void finishBisectFlow(false)}
-                    >
-                      {t("instancePage.bisect.keep")}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="instance-bisect__copy">
-                    <small>
-                      {t("instancePage.bisect.round", {
-                        round: bisect.round,
-                        count: bisect.candidates.length,
-                      })}
-                    </small>
-                    <strong>
-                      {t("instancePage.bisect.testing", {
-                        count: bisect.testing.length,
-                      })}
-                    </strong>
-                    <p>{t("instancePage.bisect.testingHint")}</p>
-                  </div>
-                  <div className="instance-bisect__actions">
-                    <button
-                      className="button button--mini button--accent"
-                      disabled={bisectBusy || instance.status === "running"}
-                      onClick={() => onPlay(instance)}
-                    >
-                      <Play size={13} fill="currentColor" />
-                      {t("instancePage.bisect.testLaunch")}
-                    </button>
-                    <button
-                      className="button button--mini"
-                      disabled={bisectBusy || instance.status === "running"}
-                      onClick={() => void reportBisectFlow(true)}
-                    >
-                      <Check size={13} />
-                      {t("instancePage.bisect.started")}
-                    </button>
-                    <button
-                      className="button button--mini"
-                      disabled={bisectBusy || instance.status === "running"}
-                      onClick={() => void reportBisectFlow(false)}
-                    >
-                      <CircleAlert size={13} />
-                      {t("instancePage.bisect.crashed")}
-                    </button>
-                    <button
-                      className="icon-button icon-button--quiet"
-                      aria-label={t("instancePage.bisect.cancel")}
-                      disabled={bisectBusy || instance.status === "running"}
-                      onClick={() => void cancelBisectFlow()}
-                    >
-                      <X size={15} />
-                    </button>
-                  </div>
-                </>
-              )}
-            </section>
-          )}
           {contentBusy ? (
             <div className="instance-page-loading">
               <LoaderCircle className="spin" size={18} />
@@ -2400,36 +2185,6 @@ export function InstancePage({
         </section>
       )}
 
-      {tab === "activity" && (
-        <section className="instance-section instance-activity-section">
-          <div className="instance-section__head">
-            <div>
-              <p>{t("instancePage.activity.eyebrow")}</p>
-              <h2>{t("instancePage.activity.title")}</h2>
-            </div>
-            <small>
-              {t("instancePage.sessions.count", {
-                count: instanceSessions.length,
-              })}
-            </small>
-          </div>
-          {instanceSessions.length ? (
-            <div className="instance-session-list instance-session-list--full">
-              {instanceSessions.map((session) => (
-                <SessionRow
-                  key={session.id}
-                  locale={locale}
-                  session={session}
-                  t={t}
-                />
-              ))}
-            </div>
-          ) : (
-            <EmptyLine text={t("instancePage.activity.empty")} />
-          )}
-        </section>
-      )}
-
       {tab === "screenshots" && (
         <section className="instance-section instance-screenshots-section">
           <div className="instance-section__head">
@@ -2491,8 +2246,58 @@ export function InstancePage({
         </section>
       )}
 
-      {tab === "performance" && (
-        <div className="instance-performance-layout">
+      {tab === "diagnostics" && (
+        <div className="instance-diagnostics-layout">
+          <div className="instance-diagnostics-nav">
+            <button
+              className={diagnosticTab === "performance" ? "is-active" : ""}
+              onClick={() => setDiagnosticTab("performance")}
+            >
+              <Activity size={14} />
+              {t("instancePage.diagnostics.sub.performance")}
+            </button>
+            <button
+              className={diagnosticTab === "bisect" ? "is-active" : ""}
+              onClick={() => setDiagnosticTab("bisect")}
+            >
+              <Bug size={14} />
+              {t("instancePage.diagnostics.sub.bisect")}
+              {bisect && <small className="badge-pulse">Active</small>}
+            </button>
+            <button
+              className={diagnosticTab === "storage" ? "is-active" : ""}
+              onClick={() => {
+                setDiagnosticTab("storage");
+                void loadStorage();
+              }}
+            >
+              <HardDrive size={14} />
+              {t("instancePage.diagnostics.sub.storage")}
+            </button>
+            <button
+              className={diagnosticTab === "snapshots" ? "is-active" : ""}
+              onClick={() => setDiagnosticTab("snapshots")}
+            >
+              <Archive size={14} />
+              {t("instancePage.diagnostics.sub.snapshots")}
+              {worldSnapshots.length > 0 && (
+                <small>{worldSnapshots.length}</small>
+              )}
+            </button>
+            <button
+              className={diagnosticTab === "activity" ? "is-active" : ""}
+              onClick={() => setDiagnosticTab("activity")}
+            >
+              <History size={14} />
+              {t("instancePage.diagnostics.sub.activity")}
+              {instanceSessions.length > 0 && (
+                <small>{instanceSessions.length}</small>
+              )}
+            </button>
+          </div>
+
+          {diagnosticTab === "performance" && (
+            <div className="instance-performance-layout">
           <section
             className={`instance-section instance-performance-capture ${
               instance.settings?.recordFps ? "is-enabled" : ""
@@ -3057,6 +2862,370 @@ export function InstancePage({
                 <Play size={15} fill="currentColor" />
                 {t("instancePage.performance.firstLaunch")}
               </button>
+            </section>
+          )}
+            </div>
+          )}
+
+          {diagnosticTab === "bisect" && (
+            <section
+              className={`instance-section instance-bisect ${
+                bisect ? "is-active" : ""
+              }`}
+            >
+              <span className="instance-bisect__icon">
+                <GitBranch size={19} />
+              </span>
+              {!bisect ? (
+                <>
+                  <div className="instance-bisect__copy">
+                    <strong>{t("instancePage.bisect.title")}</strong>
+                    <p>{t("instancePage.bisect.description")}</p>
+                  </div>
+                  <button
+                    className="button button--mini"
+                    disabled={
+                      bisectBusy ||
+                      instance.status === "running" ||
+                      content.filter((item) => item.enabled).length < 2
+                    }
+                    onClick={() => void startBisectFlow()}
+                  >
+                    {bisectBusy ? (
+                      <LoaderCircle className="spin" size={14} />
+                    ) : (
+                      <Bug size={14} />
+                    )}
+                    {t("instancePage.bisect.start")}
+                  </button>
+                </>
+              ) : bisect.status === "found" ? (
+                <>
+                  <div className="instance-bisect__copy">
+                    <small>{t("instancePage.bisect.foundEyebrow")}</small>
+                    <strong>{bisect.culprit}</strong>
+                    <p>{t("instancePage.bisect.foundHint")}</p>
+                  </div>
+                  <div className="instance-bisect__actions">
+                    <button
+                      className="button button--mini button--accent"
+                      disabled={bisectBusy}
+                      onClick={() => void finishBisectFlow(true)}
+                    >
+                      <Bug size={14} />
+                      {t("instancePage.bisect.disable")}
+                    </button>
+                    <button
+                      className="button button--mini"
+                      disabled={bisectBusy}
+                      onClick={() => void finishBisectFlow(false)}
+                    >
+                      {t("instancePage.bisect.keep")}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="instance-bisect__copy">
+                    <small>
+                      {t("instancePage.bisect.round", {
+                        round: bisect.round,
+                        count: bisect.candidates.length,
+                      })}
+                    </small>
+                    <strong>
+                      {t("instancePage.bisect.testing", {
+                        count: bisect.testing.length,
+                      })}
+                    </strong>
+                    <p>{t("instancePage.bisect.testingHint")}</p>
+                  </div>
+                  <div className="instance-bisect__actions">
+                    <button
+                      className="button button--mini button--accent"
+                      disabled={bisectBusy || instance.status === "running"}
+                      onClick={() => onPlay(instance)}
+                    >
+                      <Play size={13} fill="currentColor" />
+                      {t("instancePage.bisect.testLaunch")}
+                    </button>
+                    <button
+                      className="button button--mini"
+                      disabled={bisectBusy || instance.status === "running"}
+                      onClick={() => void reportBisectFlow(true)}
+                    >
+                      <Check size={13} />
+                      {t("instancePage.bisect.started")}
+                    </button>
+                    <button
+                      className="button button--mini"
+                      disabled={bisectBusy || instance.status === "running"}
+                      onClick={() => void reportBisectFlow(false)}
+                    >
+                      <CircleAlert size={13} />
+                      {t("instancePage.bisect.crashed")}
+                    </button>
+                    <button
+                      className="icon-button icon-button--quiet"
+                      aria-label={t("instancePage.bisect.cancel")}
+                      disabled={bisectBusy || instance.status === "running"}
+                      onClick={() => void cancelBisectFlow()}
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                </>
+              )}
+            </section>
+          )}
+
+          {diagnosticTab === "storage" && (
+            <section className="instance-section instance-storage">
+              <div className="instance-section__head">
+                <div>
+                  <p>{t("instancePage.storage.eyebrow")}</p>
+                  <h2>{t("instancePage.storage.title")}</h2>
+                </div>
+                <button
+                  className="icon-button icon-button--quiet"
+                  aria-label={t("instancePage.storage.refresh")}
+                  title={t("instancePage.storage.refresh")}
+                  disabled={storageBusy}
+                  onClick={() => void loadStorage(true)}
+                >
+                  <RefreshCw
+                    className={storageBusy ? "spin" : ""}
+                    size={14}
+                  />
+                </button>
+              </div>
+              {storageBusy && !storageReport ? (
+                <div className="instance-storage__loading">
+                  <LoaderCircle className="spin" size={16} />
+                  {t("instancePage.storage.loading")}
+                </div>
+              ) : storageReport ? (
+                <>
+                  <div className="instance-storage__total">
+                    <span>
+                      <HardDrive size={18} />
+                    </span>
+                    <div>
+                      <strong>
+                        {formatBytes(storageReport.totalBytes, locale)}
+                      </strong>
+                      <small>
+                        {t("instancePage.storage.files", {
+                          files: storageReport.totalFiles,
+                          folders: storageReport.totalDirectories,
+                        })}
+                      </small>
+                    </div>
+                  </div>
+                  {storageReport.totalBytes > 0 && (
+                    <div
+                      className="instance-storage__bar"
+                      aria-label={t("instancePage.storage.breakdown")}
+                    >
+                      {storageReport.categories
+                        .filter((category) => category.bytes > 0)
+                        .map((category) => (
+                          <span
+                            className={`is-${category.id}`}
+                            key={category.id}
+                            title={`${t(
+                              STORAGE_CATEGORY_LABELS[category.id],
+                            )}: ${formatBytes(category.bytes, locale)}`}
+                            style={{
+                              width: `${
+                                (category.bytes /
+                                  storageReport.totalBytes) *
+                                100
+                              }%`,
+                            }}
+                          />
+                        ))}
+                    </div>
+                  )}
+                  <div className="instance-storage__categories">
+                    {storageReport.categories
+                      .slice()
+                      .sort((left, right) => right.bytes - left.bytes)
+                      .slice(0, 6)
+                      .map((category) => (
+                        <div key={category.id}>
+                          <i className={`is-${category.id}`} />
+                          <span>
+                            {t(STORAGE_CATEGORY_LABELS[category.id])}
+                          </span>
+                          <strong>
+                            {formatBytes(category.bytes, locale)}
+                          </strong>
+                        </div>
+                      ))}
+                  </div>
+                  <div
+                    className={`instance-storage__cleanup ${
+                      storageReport.cleanable.files > 0
+                        ? "has-files"
+                        : ""
+                    }`}
+                  >
+                    <div>
+                      <strong>
+                        {storageReport.cleanable.files > 0
+                          ? t("instancePage.storage.cleanable", {
+                              size: formatBytes(
+                                storageReport.cleanable.bytes,
+                                locale,
+                              ),
+                            })
+                          : t("instancePage.storage.clean")}
+                      </strong>
+                      <small>
+                        {storageReport.cleanable.files > 0
+                          ? t("instancePage.storage.cleanableHint", {
+                              files: storageReport.cleanable.files,
+                            })
+                          : t("instancePage.storage.cleanHint")}
+                      </small>
+                    </div>
+                    {storageReport.cleanable.files > 0 && (
+                      <button
+                        className={`button button--mini ${
+                          storageCleanupConfirm ? "button--danger" : ""
+                        }`}
+                        disabled={
+                          storageBusy || instance.status === "running"
+                        }
+                        onClick={() => void cleanupStorage()}
+                      >
+                        {storageBusy ? (
+                          <LoaderCircle className="spin" size={13} />
+                        ) : (
+                          <Trash2 size={13} />
+                        )}
+                        {storageCleanupConfirm
+                          ? t("instancePage.storage.confirm")
+                          : t("instancePage.storage.cleanup")}
+                      </button>
+                    )}
+                  </div>
+                  {storageReport.inaccessible > 0 && (
+                    <small className="instance-storage__warning">
+                      <CircleAlert size={12} />
+                      {t("instancePage.storage.inaccessible", {
+                        count: storageReport.inaccessible,
+                      })}
+                    </small>
+                  )}
+                </>
+              ) : null}
+            </section>
+          )}
+
+          {diagnosticTab === "snapshots" && (
+            <section className="instance-section instance-world-guard">
+              <div className="instance-section__head">
+                <div>
+                  <p>{t("instancePage.worlds.eyebrow")}</p>
+                  <h2>{t("instancePage.worlds.title")}</h2>
+                </div>
+                <button
+                  className="button button--mini"
+                  disabled={worldBusy || instance.status === "running"}
+                  onClick={() => void createWorldSnapshot()}
+                >
+                  {worldBusy ? (
+                    <LoaderCircle className="spin" size={14} />
+                  ) : (
+                    <Archive size={14} />
+                  )}
+                  {t("instancePage.worlds.create")}
+                </button>
+              </div>
+              <p className="instance-world-guard__hint">
+                <ShieldCheck size={15} />
+                {t("instancePage.worlds.hint")}
+              </p>
+              {worldSnapshots.length ? (
+                <div className="instance-world-list">
+                  {worldSnapshots.slice(0, 8).map((snapshot) => (
+                    <div className="instance-world-row" key={snapshot.id}>
+                      <span>
+                        <Archive size={15} />
+                      </span>
+                      <div>
+                        <strong>
+                          {worldReason(snapshot.reason, t)}
+                        </strong>
+                        <small>
+                          {new Intl.DateTimeFormat(locale, {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          }).format(new Date(snapshot.createdAt))}
+                          {" · "}
+                          {t("instancePage.worlds.count", {
+                            count: snapshot.worlds.length,
+                          })}
+                          {" · "}
+                          {formatBytes(snapshot.bytes, locale)}
+                        </small>
+                      </div>
+                      <button
+                        className={`button button--mini ${
+                          restoreSnapshotId === snapshot.id
+                            ? "button--danger"
+                            : ""
+                        }`}
+                        disabled={
+                          worldBusy || instance.status === "running"
+                        }
+                        onClick={() =>
+                          void restoreWorldSnapshot(snapshot)
+                        }
+                      >
+                        <RotateCcw size={13} />
+                        {restoreSnapshotId === snapshot.id
+                          ? t("instancePage.worlds.confirm")
+                          : t("instancePage.worlds.restore")}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyLine text={t("instancePage.worlds.noSnapshots")} />
+              )}
+            </section>
+          )}
+
+          {diagnosticTab === "activity" && (
+            <section className="instance-section instance-activity-section">
+              <div className="instance-section__head">
+                <div>
+                  <p>{t("instancePage.activity.eyebrow")}</p>
+                  <h2>{t("instancePage.activity.title")}</h2>
+                </div>
+                <small>
+                  {t("instancePage.sessions.count", {
+                    count: instanceSessions.length,
+                  })}
+                </small>
+              </div>
+              {instanceSessions.length ? (
+                <div className="instance-session-list instance-session-list--full">
+                  {instanceSessions.map((session) => (
+                    <SessionRow
+                      key={session.id}
+                      locale={locale}
+                      session={session}
+                      t={t}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <EmptyLine text={t("instancePage.activity.empty")} />
+              )}
             </section>
           )}
         </div>
@@ -3713,24 +3882,6 @@ function performanceInsightText(
   }
 }
 
-function QuickAction({
-  icon: Icon,
-  label,
-  captureTarget,
-  onClick,
-}: {
-  icon: typeof Gauge;
-  label: string;
-  captureTarget?: string;
-  onClick: () => void;
-}) {
-  return (
-    <button data-capture-target={captureTarget} onClick={onClick}>
-      <Icon size={16} />
-      <span>{label}</span>
-    </button>
-  );
-}
 
 function EmptyLine({ text }: { text: string }) {
   return <div className="instance-empty-line">{text}</div>;
@@ -3848,3 +3999,33 @@ function ServerStatusLine({
     </span>
   );
 }
+
+function ScreenshotPreviewThumb({
+  instanceId,
+  name,
+}: {
+  instanceId: string;
+  name: string;
+}) {
+  const [data, setData] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    window.onyx.state
+      .readScreenshot(instanceId, name)
+      .then((d: string) => {
+        if (!cancelled) setData(d);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [instanceId, name]);
+
+  return data ? (
+    <img src={data} alt={name} loading="lazy" />
+  ) : (
+    <div className="screenshot-preview-skeleton" />
+  );
+}
+

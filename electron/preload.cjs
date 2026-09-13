@@ -136,6 +136,13 @@ contextBridge.exposeInMainWorld("onyx", {
     exportSupportBundle: (instanceId) =>
       ipcRenderer.invoke("launcher:export-support-bundle", instanceId),
   },
+  migration: {
+    detect: () => ipcRenderer.invoke("migration:detect"),
+    browseFolder: () => ipcRenderer.invoke("migration:browse-folder"),
+    inspectFolder: (folderPath) =>
+      ipcRenderer.invoke("migration:inspect-folder", folderPath),
+    import: (candidates) => ipcRenderer.invoke("migration:import", candidates),
+  },
   onDownloadProgress: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("download:progress", listener);
@@ -186,5 +193,10 @@ contextBridge.exposeInMainWorld("onyx", {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("maintenance:progress", listener);
     return () => ipcRenderer.removeListener("maintenance:progress", listener);
+  },
+  onMigrationProgress: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("migration:progress", listener);
+    return () => ipcRenderer.removeListener("migration:progress", listener);
   },
 });
