@@ -8,7 +8,7 @@ export type RouteId =
   | "settings";
 
 export type Accent = "lime" | "violet" | "cyan";
-export type Locale = "en";
+export type Locale = "en" | "ru";
 export type InstanceColor = "lime" | "amber" | "violet" | "cyan" | "rose";
 export type InstanceStatus =
   | "ready"
@@ -270,23 +270,58 @@ export interface FpsRecorderStatus {
   installHint: string | null;
 }
 
+export interface ProjectGalleryItem {
+  url: string;
+  featured?: boolean;
+  title?: string;
+  description?: string;
+}
+
+export interface ProjectVersionFile {
+  id: string | number;
+  name: string;
+  versionNumber?: string;
+  fileName: string;
+  fileSize?: number;
+  datePublished: string;
+  releaseType: "release" | "beta" | "alpha";
+  gameVersions: string[];
+  loaders: string[];
+  downloads?: number;
+  downloadUrl?: string | null;
+  changelog?: string;
+  raw?: unknown;
+}
+
 export interface CatalogProject {
   project_id: string;
-  project_type: "mod" | "modpack";
+  project_type: "mod" | "modpack" | "resourcepack" | "shader";
   slug: string;
   author: string;
   title: string;
   description: string;
+  body?: string;
   categories: string[];
   versions: string[];
   downloads: number;
   follows: number;
   icon_url: string | null;
+  banner_url?: string | null;
   date_modified: string;
   latest_version: string;
   license: string;
   client_side: string;
   server_side: string;
+  source?: "modrinth" | "curseforge";
+  curseforgeId?: number;
+  gallery?: ProjectGalleryItem[];
+  links?: {
+    website?: string;
+    wiki?: string;
+    issues?: string;
+    source?: string;
+    discord?: string;
+  };
 }
 
 export interface CatalogResponse {
@@ -658,6 +693,26 @@ export interface MigrationResult {
   errors: Array<{ name: string; error: string }>;
 }
 
+export interface UpdateInfo {
+  updateAvailable: boolean;
+  currentVersion: string;
+  latestVersion: string;
+  releaseName: string;
+  releaseNotes: string;
+  publishedAt: string;
+  downloadUrl: string | null;
+  assetName: string | null;
+  assetSize: number;
+}
+
+export interface UpdateProgress {
+  received: number;
+  total: number;
+  percent?: number;
+  speed?: number | null;
+  eta?: number | null;
+}
+
 export interface OnyxBridge {
   window: {
     minimize(): Promise<void>;
@@ -830,8 +885,22 @@ export interface OnyxBridge {
         loader?: string;
         index?: "relevance" | "downloads" | "follows" | "newest" | "updated";
         offset?: number;
+        source?: "modrinth" | "curseforge";
       },
     ): Promise<CatalogResponse>;
+    getProject(
+      id: string | number,
+      source?: "modrinth" | "curseforge",
+    ): Promise<unknown>;
+    getVersions(
+      id: string | number,
+      source?: "modrinth" | "curseforge",
+      options?: {
+        gameVersion?: string;
+        loader?: string;
+        pageSize?: number;
+      },
+    ): Promise<unknown[]>;
     install(
       project: CatalogProject,
       targetInstanceId?: string,
@@ -839,6 +908,51 @@ export interface OnyxBridge {
     importPack(): Promise<DownloadTask | null>;
     cancel(taskId: string): Promise<boolean>;
     clearHistory(): Promise<DownloadTask[]>;
+  };
+  curseforge: {
+    search(
+      query: string,
+      type?: "modpack" | "mod" | "resourcepack" | "shader",
+      options?: {
+        gameVersion?: string;
+        loader?: string;
+        index?: number;
+        pageSize?: number;
+        sortField?: number;
+      },
+    ): Promise<CatalogResponse>;
+    getMod(modId: string | number): Promise<CatalogProject & { raw: unknown }>;
+    getFiles(
+      modId: string | number,
+      options?: {
+        gameVersion?: string;
+        loader?: string;
+        pageSize?: number;
+      },
+    ): Promise<
+      Array<{
+        id: number;
+        displayName: string;
+        fileName: string;
+        fileDate: string;
+        fileLength: number;
+        releaseType: number;
+        downloadUrl: string | null;
+        gameVersions: string[];
+      }>
+    >;
+    description(modId: string | number): Promise<string>;
+    installMod(
+      instanceId: string,
+      modId: string | number,
+      fileId?: number,
+    ): Promise<{ destination: string; fileName: string; fileId: number }>;
+    installModpack(options: {
+      fileUrl?: string;
+      fileId?: number;
+      modId?: number;
+      packName?: string;
+    }): Promise<{ instanceId: string; name: string; metadata: GameInstance }>;
   };
   launcher: {
     preflight(instanceId: string): Promise<InstanceHealthReport>;
@@ -863,6 +977,13 @@ export interface OnyxBridge {
     } | null>;
     inspectFolder(folderPath: string): Promise<DiscoveredInstance | null>;
     import(candidates: DiscoveredInstance[]): Promise<MigrationResult>;
+  };
+  updater: {
+    check(): Promise<UpdateInfo>;
+    download(): Promise<{ destination: string; size: number } | boolean>;
+    install(): Promise<boolean>;
+    onProgress(callback: (progress: UpdateProgress) => void): () => void;
+    onUpdateAvailable?(callback: (info: UpdateInfo) => void): () => void;
   };
   onDownloadProgress(
     callback: (progress: DownloadProgress) => void,

@@ -168,7 +168,39 @@ class ModpackService {
       progress: 11,
       message: "Reading the modpack manifest…",
     });
-    const index = await readZipJson(packPath, "modrinth.index.json");
+
+    let index;
+    try {
+      index = await readZipJson(packPath, "modrinth.index.json");
+    } catch {
+      try {
+        const manifest = await readZipJson(packPath, "manifest.json");
+        if (manifest.manifestType === "minecraftModpack" || manifest.files) {
+          const curseforgeService = require("./curseforge.cjs");
+          const result = await curseforgeService.installCurseForgeModpack({
+            instancesRoot: this.instancesRoot,
+            archivePath: packPath,
+            packName: manifest.name,
+            onProgress: (p) => {
+              onProgress?.({
+                stage: p.stage,
+                progress: Math.round(p.progress * 100),
+                message: p.message,
+                speed: p.speed,
+                eta: p.eta,
+              });
+            },
+          });
+          return result.metadata;
+        }
+      } catch {
+        // Fall through to error below
+      }
+      throw new Error(
+        "Unsupported modpack format: neither modrinth.index.json nor manifest.json found",
+      );
+    }
+
     if (index.formatVersion !== 1) {
       throw new Error(
         `Modrinth format version ${index.formatVersion} is not supported`,

@@ -121,11 +121,27 @@ contextBridge.exposeInMainWorld("onyx", {
     picks: () => ipcRenderer.invoke("catalog:picks"),
     search: (query, projectType, options) =>
       ipcRenderer.invoke("catalog:search", query, projectType, options),
+    getProject: (id, source) =>
+      ipcRenderer.invoke("catalog:project", id, source),
+    getVersions: (id, source, options) =>
+      ipcRenderer.invoke("catalog:versions", id, source, options),
     install: (project, targetInstanceId) =>
       ipcRenderer.invoke("catalog:install", project, targetInstanceId),
     importPack: () => ipcRenderer.invoke("catalog:import-pack"),
     cancel: (taskId) => ipcRenderer.invoke("catalog:cancel", taskId),
     clearHistory: () => ipcRenderer.invoke("catalog:clear-history"),
+  },
+  curseforge: {
+    search: (query, type, options) =>
+      ipcRenderer.invoke("curseforge:search", query, type, options),
+    getMod: (modId) => ipcRenderer.invoke("curseforge:mod", modId),
+    getFiles: (modId, options) =>
+      ipcRenderer.invoke("curseforge:files", modId, options),
+    description: (modId) => ipcRenderer.invoke("curseforge:description", modId),
+    installMod: (instanceId, modId, fileId) =>
+      ipcRenderer.invoke("curseforge:install-mod", instanceId, modId, fileId),
+    installModpack: (options) =>
+      ipcRenderer.invoke("curseforge:install-modpack", options),
   },
   launcher: {
     preflight: (instanceId) =>
@@ -142,6 +158,21 @@ contextBridge.exposeInMainWorld("onyx", {
     inspectFolder: (folderPath) =>
       ipcRenderer.invoke("migration:inspect-folder", folderPath),
     import: (candidates) => ipcRenderer.invoke("migration:import", candidates),
+  },
+  updater: {
+    check: () => ipcRenderer.invoke("updater:check"),
+    download: () => ipcRenderer.invoke("updater:download"),
+    install: () => ipcRenderer.invoke("updater:install"),
+    onProgress: (callback) => {
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on("updater:progress", listener);
+      return () => ipcRenderer.removeListener("updater:progress", listener);
+    },
+    onUpdateAvailable: (callback) => {
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on("updater:available", listener);
+      return () => ipcRenderer.removeListener("updater:available", listener);
+    },
   },
   onDownloadProgress: (callback) => {
     const listener = (_event, payload) => callback(payload);

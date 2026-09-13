@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Accessibility,
@@ -10,6 +10,7 @@ import {
   Coffee,
   Cpu,
   Database,
+  Download,
   ExternalLink,
   FileJson,
   FolderOpen,
@@ -18,6 +19,7 @@ import {
   HeartPulse,
   Info,
   Laptop,
+  LoaderCircle,
   Palette,
   RefreshCw,
   ShieldCheck,
@@ -31,9 +33,11 @@ import type {
   LauncherSettings,
   Profile,
   SystemDiagnostics,
+  UpdateInfo,
+  UpdateProgress,
 } from "../types";
 import { useI18n } from "../i18n";
-import { formatBytes } from "../utils";
+import { formatBytes, formatSpeed, formatEta } from "../utils";
 import { DiscordIcon } from "../components/DiscordIcon";
 import packageMetadata from "../../package.json";
 
@@ -76,6 +80,93 @@ export function SettingsPage({
     null,
   );
   const [diagnosticsBusy, setDiagnosticsBusy] = useState(false);
+
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [downloadingUpdate, setDownloadingUpdate] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState<UpdateProgress | null>(null);
+  const [updateReady, setUpdateReady] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!window.onyx?.updater?.onProgress) return;
+    const unsubscribe = window.onyx.updater.onProgress((progress) => {
+      setUpdateProgress(progress);
+      if (progress.percent !== undefined && progress.percent >= 100) {
+        setDownloadingUpdate(false);
+        setUpdateReady(true);
+      }
+    });
+    return () => {
+      if (typeof unsubscribe === "function") unsubscribe();
+    };
+  }, []);
+
+  const handleCheckUpdates = async () => {
+    setCheckingUpdate(true);
+    setUpdateError(null);
+    try {
+      const result = await window.onyx.updater.check();
+      setUpdateInfo(result);
+      if (!result.updateAvailable) {
+        onNotify(
+          "info",
+          "App Updates",
+          "You are using the latest version of Onyx Launcher.",
+        );
+      } else {
+        onNotify(
+          "success",
+          "App Updates",
+          `Onyx Launcher v${result.latestVersion} is available!`,
+        );
+      }
+    } catch (error) {
+      const msg =
+        error instanceof Error ? error.message : "Failed to check for updates";
+      setUpdateError(msg);
+      onNotify("warning", "App Updates", msg);
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
+
+  const handleDownloadUpdate = async () => {
+    setDownloadingUpdate(true);
+    setUpdateError(null);
+    setUpdateProgress({
+      received: 0,
+      total: updateInfo?.assetSize || 0,
+      percent: 0,
+    });
+    try {
+      await window.onyx.updater.download();
+      setUpdateReady(true);
+      setDownloadingUpdate(false);
+      onNotify(
+        "success",
+        "App Updates",
+        "Update downloaded successfully. Ready to restart and apply.",
+      );
+    } catch (error) {
+      setDownloadingUpdate(false);
+      const msg =
+        error instanceof Error ? error.message : "Failed to download update";
+      setUpdateError(msg);
+      onNotify("warning", "App Updates", msg);
+    }
+  };
+
+  const handleApplyUpdate = async () => {
+    try {
+      await window.onyx.updater.install();
+    } catch (error) {
+      const msg =
+        error instanceof Error ? error.message : "Failed to apply update";
+      setUpdateError(msg);
+      onNotify("warning", "App Updates", msg);
+    }
+  };
 
   const update = async (patch: Partial<LauncherSettings>) => {
     await onUpdate(patch);
@@ -221,6 +312,150 @@ export function SettingsPage({
                     void update({ autoCheckUpdates: value })
                   }
                 />
+              </SettingsGroup>
+
+              <SettingsGroup title="App Updates">
+                <div className="setting-row">
+                  <span className="setting-row__icon">
+                    <RefreshCw size={17} className={checkingUpdate ? "spin" : ""} />
+                  </span>
+                  <div>
+                    <strong>Onyx Launcher v{packageMetadata.version}</strong>
+                    <p>
+                      {checkingUpdate
+                        ? "Checking for updates…"
+                        : updateReady
+                        ? "Update downloaded and ready to install"
+                        : downloadingUpdate
+                        ? "Downloading update…"
+                        : updateInfo?.updateAvailable
+                        ? `New version available: v${updateInfo.latestVersion}`
+                        : updateInfo
+                        ? "Onyx Launcher is up to date"
+                        : "Check GitHub releases for the latest version"}
+                    </p>
+                    {updateError && (
+                      <small style={{ color: "var(--danger, #ef4444)" }}>{updateError}</small>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="button button--secondary button--mini"
+                    onClick={handleCheckUpdates}
+                    disabled={checkingUpdate || downloadingUpdate}
+                  >
+                    {checkingUpdate && <LoaderCircle size={14} className="spin" />}
+                    <span>{checkingUpdate ? "Checking…" : "Check for Updates"}</span>
+                  </button>
+                </div>
+
+                {updateInfo?.updateAvailable && (
+                  <div style={{ padding: "14px 16px", borderTop: "1px solid var(--line)" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 12,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <div>
+                        <strong style={{ fontSize: 13, color: "var(--text)" }}>
+                          Onyx Launcher v{updateInfo.latestVersion}
+                        </strong>
+                        {updateInfo.publishedAt && (
+                          <span
+                            style={{
+                              fontSize: 12,
+                              color: "var(--text-soft)",
+                              marginLeft: 8,
+                            }}
+                          >
+                            • Released {new Date(updateInfo.publishedAt).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        {!downloadingUpdate && !updateReady && (
+                          <button
+                            type="button"
+                            className="button button--primary button--mini"
+                            onClick={handleDownloadUpdate}
+                          >
+                            <Download size={14} />
+                            <span>Download & Install</span>
+                          </button>
+                        )}
+                        {updateReady && (
+                          <button
+                            type="button"
+                            className="button button--primary button--mini"
+                            onClick={handleApplyUpdate}
+                          >
+                            <Check size={14} />
+                            <span>Restart & Apply Update</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {updateInfo.releaseNotes && (
+                      <div
+                        style={{
+                          marginTop: 10,
+                          padding: "10px 12px",
+                          background: "var(--surface-raised)",
+                          borderRadius: "var(--radius-sm)",
+                          border: "1px solid var(--line)",
+                          fontSize: 12,
+                          color: "var(--text-soft)",
+                          maxHeight: 140,
+                          overflowY: "auto",
+                          whiteSpace: "pre-wrap",
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {updateInfo.releaseNotes}
+                      </div>
+                    )}
+
+                    {downloadingUpdate && (
+                      <div style={{ marginTop: 12 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            fontSize: 12,
+                            color: "var(--text-soft)",
+                            marginBottom: 6,
+                          }}
+                        >
+                          <span>
+                            {updateProgress?.percent ?? 0}% ({formatBytes(updateProgress?.received || 0, locale)} / {formatBytes(updateProgress?.total || updateInfo.assetSize || 0, locale)})
+                          </span>
+                          <div style={{ display: "flex", gap: 12 }}>
+                            {updateProgress?.speed ? (
+                              <span>{formatSpeed(updateProgress.speed)}</span>
+                            ) : null}
+                            {updateProgress?.eta ? (
+                              <span>ETA: {formatEta(updateProgress.eta)}</span>
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="migration-progress-bar">
+                          <div
+                            className="migration-progress-bar__fill"
+                            style={{
+                              width: `${Math.max(0, Math.min(updateProgress?.percent ?? 0, 100))}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </SettingsGroup>
               <SettingsGroup title={t("settings.system")}>
                 <ToggleRow

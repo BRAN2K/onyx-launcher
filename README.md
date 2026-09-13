@@ -27,17 +27,25 @@ Got questions, hit a crash, want to suggest a feature, or test upcoming beta bui
 | --- | --- |
 | ![Onyx Launcher home screen](artifacts/home.png) | ![Minecraft instance library](artifacts/library.png) |
 
-| Discover | Onyx Picks |
+| Modrinth Catalog | CurseForge Official Catalog |
 | --- | --- |
-| ![Modrinth discovery catalog](artifacts/discover.png) | ![Curated Onyx Picks modpacks](artifacts/onyx-picks.png) |
+| ![Modrinth discovery catalog](artifacts/discover.png) | ![CurseForge official repository](artifacts/curseforge-discover.png) |
 
-| Instance details | Settings |
+| Mod Details (Overview & Gallery) | Mod Versions & 1-Click Install |
 | --- | --- |
-| ![Minecraft instance details and performance](artifacts/instance.png) | ![Onyx Launcher settings](artifacts/settings.png) |
+| ![Mod detail overview and high-res gallery](artifacts/mod-detail-overview.png) | ![Mod versions, filters, and 1-click install](artifacts/mod-detail-versions.png) |
 
-| Profiles and skins |
+| Curated Onyx Picks | Universal 1-Click Migration |
+| --- | --- |
+| ![Curated Onyx Picks modpacks](artifacts/onyx-picks.png) | ![Universal migration from Prism, CurseForge, Modrinth](artifacts/migration.png) |
+
+| Instance Details & Flight Recorder | 3D Skin & Cape Studio |
+| --- | --- |
+| ![Minecraft instance details and performance](artifacts/instance.png) | ![3D WebGL Three.js character & cape studio](artifacts/profiles-and-skins.png) |
+
+| Settings & Live Auto-Updater |
 | --- |
-| ![Minecraft profiles and skins](artifacts/profiles-and-skins.png) |
+| ![Onyx Launcher settings and auto-updater](artifacts/settings.png) |
 
 All screenshots are generated from the current English UI with `npm run capture:screenshots`.
 
@@ -71,15 +79,18 @@ All screenshots are generated from the current English UI with `npm run capture:
 - Transactional mod profiles, mod update history, storage analysis, and safe cleanup.
 - Safe instance-directory migration with verification and rollback.
 
-### Modrinth and accounts
+### Modrinth, CurseForge, and Discovery
 
-- Searchable Modrinth modpack and mod catalog with filters and pagination.
-- Curated Onyx Picks with play-style and memory filters.
-- Complete `.mrpack` installation, local import, dependency resolution, and updates.
+- Searchable Modrinth and CurseForge modpack & mod catalogs with official vector branding, filters, and pagination.
+- Detailed mod and modpack view with high-res screenshot gallery, rich HTML/Markdown descriptions, environment sidebars, and 1-click version installers.
+- Curated Onyx Picks with play-style and hardware match filters.
+- Complete `.mrpack` and CurseForge manifest installation, dependency resolution, and updates.
+- Universal 1-click migration from Prism, CurseForge, Modrinth App, MultiMC, PolyMC, ATLauncher, Feather Client, and Vanilla.
+- Built-in GitHub Releases Auto-Updater with streaming downloads, byte-level progress bar, speed, ETA, and 1-click restart.
 - Resumable HTTP downloads with cancellation and partial-file cleanup.
 - Microsoft/Xbox device-code sign-in without exposing the account password to Onyx.
 - Minecraft: Java Edition entitlement checks and multiple saved Microsoft accounts.
-- Offline accounts and per-profile skin management.
+- Offline accounts and per-profile skin management with native 3D WebGL Three.js character & cape studio.
 - Refresh-token encryption through Electron `safeStorage`; tokens remain memory-only when secure storage is unavailable.
 
 ## Install

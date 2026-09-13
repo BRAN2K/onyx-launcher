@@ -1,4 +1,4 @@
-type FormattingLocale = "en";
+type FormattingLocale = "en" | "ru" | string;
 
 export function formatPlaytime(
   minutes: number,

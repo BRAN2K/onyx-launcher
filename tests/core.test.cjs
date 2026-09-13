@@ -12,6 +12,8 @@ const { ZipArchive } = require("archiver");
 const {
   applyRules,
   mavenArtifact,
+  libraryKey,
+  mergeVersion,
   expandArguments,
   parseServerAddress,
   normalizeResolvedVersionId,
@@ -184,6 +186,38 @@ test("Maven coordinates are converted to the official library path", () => {
   assert.equal(
     artifact.url,
     "https://repo.example/org/example/demo/1.2.3/demo-1.2.3-natives-windows.jar",
+  );
+});
+
+test("mergeVersion deduplicates libraries by Maven coordinate giving child precedence", () => {
+  const parent = {
+    id: "1.21.4",
+    libraries: [
+      { name: "org.ow2.asm:asm:9.6" },
+      { name: "org.lwjgl:lwjgl:3.3.3" },
+      { name: "com.google.guava:guava:32.1.2-jre" },
+    ],
+  };
+  const child = {
+    id: "fabric-loader-0.19.5-1.21.4",
+    inheritsFrom: "1.21.4",
+    libraries: [
+      { name: "org.ow2.asm:asm:9.10.1" },
+      { name: "net.fabricmc:fabric-loader:0.19.5" },
+    ],
+  };
+  const merged = mergeVersion(parent, child);
+  const names = merged.libraries.map((l) => l.name);
+  assert.deepEqual(names, [
+    "org.ow2.asm:asm:9.10.1",
+    "net.fabricmc:fabric-loader:0.19.5",
+    "org.lwjgl:lwjgl:3.3.3",
+    "com.google.guava:guava:32.1.2-jre",
+  ]);
+  assert.equal(libraryKey({ name: "org.ow2.asm:asm:9.6" }), "org.ow2.asm:asm");
+  assert.equal(
+    libraryKey({ name: "org.lwjgl:lwjgl:3.3.3:natives-macos" }),
+    "org.lwjgl:lwjgl:natives-macos",
   );
 });
 

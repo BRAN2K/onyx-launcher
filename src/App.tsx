@@ -365,6 +365,17 @@ export default function App() {
       }
     });
 
+    const removeUpdater = window.onyx.updater?.onUpdateAvailable?.(
+      (update) => {
+        pushToast(
+          "info",
+          "Onyx Launcher Update",
+          `Version ${update.latestVersion} is available to install. Check Settings to download.`,
+          8000,
+        );
+      },
+    );
+
     return () => {
       removeDownload();
       removeInstance();
@@ -373,6 +384,7 @@ export default function App() {
       removeLog();
       removeAuth();
       removeMaintenance();
+      if (typeof removeUpdater === "function") removeUpdater();
     };
   }, [pushToast, refreshState, t]);
 
@@ -1136,6 +1148,7 @@ export default function App() {
         return (
           <DiscoverPage
             downloads={state.downloads}
+            instances={state.instances}
             versions={versions}
             onInstall={(project) => void installProject(project)}
             onNavigate={setRoute}

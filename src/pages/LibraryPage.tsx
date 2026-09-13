@@ -114,6 +114,7 @@ export function LibraryPage({
           <div className="dropdown-wrapper" ref={importMenuRef}>
             <button
               className="button button--secondary"
+              data-capture-target="import-menu"
               onClick={() => setImportMenuOpen((prev) => !prev)}
             >
               <Download size={15} />
@@ -124,6 +125,7 @@ export function LibraryPage({
               <div className="dropdown-menu dropdown-menu--right">
                 <button
                   className="dropdown-item"
+                  data-capture-target="migrate-item"
                   onClick={() => {
                     setImportMenuOpen(false);
                     onMigrate();

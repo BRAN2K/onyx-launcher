@@ -105,6 +105,8 @@ const {
   migrateInstanceFiles,
   createOnyxInstanceFromCandidate,
 } = require("./services/migration.cjs");
+const curseforgeService = require("./services/curseforge.cjs");
+const { UpdaterService } = require("./services/updater.cjs");
 
 if (process.env.ONYX_USER_DATA) {
   app.setPath("userData", path.resolve(process.env.ONYX_USER_DATA));
@@ -173,6 +175,7 @@ let statePath;
 let state = structuredClone(DEFAULT_STATE);
 let authService;
 let javaService;
+const updaterService = new UpdaterService({ currentVersion: ONYX_VERSION });
 const telemetryService = new TelemetryService();
 const runningGames = new Map();
 const installLocks = new Map();
@@ -529,32 +532,41 @@ async function createWindow() {
         .map((target) => target.trim())
         .filter(Boolean);
       for (const target of targets) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        await launcherWindow.webContents.executeJavaScript(
-          `(() => {
-            const target = ${JSON.stringify(target)};
-            const element = [
-              ...document.querySelectorAll("button, [data-capture-target]")
-            ].find(
-              (item) =>
+        let clicked = false;
+        for (let attempt = 0; attempt < 25; attempt++) {
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          clicked = await launcherWindow.webContents.executeJavaScript(
+            `(() => {
+              const target = ${JSON.stringify(target)};
+              const elements = [
+                ...document.querySelectorAll("button, [data-capture-target], [role='button'], .dropdown-item, .project-detail__tab, .project-card, .catalog-feature")
+              ];
+              const element = elements.find((item) =>
                 [
+                  item.getAttribute("data-capture-target"),
                   item.textContent,
                   item.getAttribute("aria-label"),
-                  item.getAttribute("data-capture-target"),
                   item.title
                 ]
                   .filter(Boolean)
-                  .some((value) => value.includes(target))
-            );
-            if (element) {
-              element.scrollIntoView({ block: "center", inline: "nearest" });
-              element.click();
-            }
-          })()`,
-        );
+                  .some((value) => value.toLowerCase().includes(target.toLowerCase()))
+              );
+              if (element) {
+                element.scrollIntoView({ block: "center", inline: "nearest" });
+                element.click();
+                return true;
+              }
+              return false;
+            })()`,
+          );
+          if (clicked) {
+            await new Promise((resolve) => setTimeout(resolve, 600));
+            break;
+          }
+        }
       }
     }
-    await new Promise((resolve) => setTimeout(resolve, 1350));
+    await new Promise((resolve) => setTimeout(resolve, 2500));
     const image = await launcherWindow.capturePage();
     await fsp.writeFile(path.resolve(capturePath), image.toPNG());
     app.quit();
@@ -748,6 +760,48 @@ async function installModToInstance(project, targetInstance, task, signal) {
     throw new Error(
       "JAR mods require a Fabric, Quilt, Forge, or NeoForge instance",
     );
+  }
+
+  if (project.source === "curseforge") {
+    const modId = project.curseforgeId || project.project_id;
+    const files = await curseforgeService.getCurseForgeFiles(modId, {
+      gameVersion: profile.minecraftVersion,
+      loader: profile.loader,
+      pageSize: 10,
+    });
+    const chosen = files.find((f) => f.releaseType === 1) || files[0];
+    if (!chosen) {
+      throw new Error(
+        `No compatible CurseForge file found for ${profile.minecraftVersion} (${profile.loader})`,
+      );
+    }
+    const downloadUrl = curseforgeService.resolveFileUrl(chosen);
+    if (!downloadUrl) {
+      throw new Error("Could not resolve download URL for selected mod");
+    }
+    const modsDir = path.join(
+      state.settings.gameDirectory,
+      targetInstance.id,
+      "mods",
+    );
+    await fsp.mkdir(modsDir, { recursive: true });
+    const dest = path.join(modsDir, chosen.fileName);
+    await downloadFile(downloadUrl, dest, {
+      signal,
+      onProgress: (p) => {
+        taskUpdate(task, {
+          progress: Math.round((p.received / (p.total || 1)) * 100),
+          received: p.received,
+          total: p.total,
+          speed: p.speed,
+          eta: p.eta,
+        });
+      },
+    });
+    return {
+      destination: dest,
+      dependencies: 0,
+    };
   }
   const loaderFacet =
     profile.loader === "vanilla" ? null : profile.loader.toLowerCase();
@@ -2220,6 +2274,24 @@ function registerIpc() {
   });
 
   ipcMain.handle("catalog:search", async (_event, query, projectType, options = {}) => {
+    if (options.source === "curseforge") {
+      return curseforgeService.searchCurseForge({
+        query: query || "",
+        type: projectType,
+        gameVersion: options.version,
+        loader: options.loader,
+        index: options.offset || 0,
+        pageSize: 24,
+        sortField:
+          options.index === "downloads"
+            ? 2
+            : options.index === "updated"
+              ? 3
+              : options.index === "newest"
+                ? 1
+                : 2,
+      });
+    }
     const type = projectType === "mod" ? "mod" : "modpack";
     const facets = [[`project_type:${type}`]];
     if (/^[a-zA-Z0-9._+-]{1,32}$/.test(options.version || "")) {
@@ -2251,6 +2323,33 @@ function registerIpc() {
     });
     return fetchJson(`https://api.modrinth.com/v2/search?${params.toString()}`);
   });
+  ipcMain.handle("catalog:project", async (_event, id, source = "modrinth") => {
+    if (source === "curseforge") {
+      return curseforgeService.getCurseForgeMod(id);
+    }
+    return fetchJson(
+      `https://api.modrinth.com/v2/project/${encodeURIComponent(id)}`,
+    );
+  });
+  ipcMain.handle(
+    "catalog:versions",
+    async (_event, id, source = "modrinth", options = {}) => {
+      if (source === "curseforge") {
+        return curseforgeService.getCurseForgeFiles(id, options);
+      }
+      const params = new URLSearchParams();
+      if (options?.loader) {
+        params.set("loaders", JSON.stringify([options.loader.toLowerCase()]));
+      }
+      if (options?.gameVersion) {
+        params.set("game_versions", JSON.stringify([options.gameVersion]));
+      }
+      const query = params.toString() ? `?${params.toString()}` : "";
+      return fetchJson(
+        `https://api.modrinth.com/v2/project/${encodeURIComponent(id)}/version${query}`,
+      );
+    },
+  );
   ipcMain.handle("catalog:picks", () => getOnyxPicks());
   ipcMain.handle(
     "catalog:install",
@@ -2316,28 +2415,54 @@ function registerIpc() {
               modCount: content.length,
             });
           } else {
-            const { modpackService } = createServices();
-            taskUpdate(task, {
-              status: "downloading",
-              subtitle: "Downloading modpack",
-            });
-            const instance = await modpackService.installProject({
-              project,
-              settings: state.settings,
-              instanceId: task.instanceId,
-              onProgress: (progress) =>
-                taskUpdate(task, {
-                  status:
-                    progress.stage === "pack" ? "downloading" : "installing",
-                  progress: progress.progress,
-                  subtitle: progress.message,
-                  received: progress.received,
-                  total: progress.total,
-                  speed: progress.speed,
-                  eta: progress.eta,
-                }),
-              signal: controller.signal,
-            });
+            let instance;
+            if (project.source === "curseforge") {
+              taskUpdate(task, {
+                status: "downloading",
+                subtitle: "Downloading CurseForge modpack",
+              });
+              const res = await curseforgeService.installCurseForgeModpack({
+                instancesRoot: state.settings.gameDirectory,
+                modId: project.curseforgeId || project.project_id,
+                packName: project.title,
+                onProgress: (p) => {
+                  taskUpdate(task, {
+                    status:
+                      p.stage && p.stage.startsWith("downloading")
+                        ? "downloading"
+                        : "installing",
+                    progress: Math.round((p.progress || 0) * 100),
+                    subtitle: p.message,
+                    speed: p.speed,
+                    eta: p.eta,
+                  });
+                },
+              });
+              instance = res.metadata;
+            } else {
+              const { modpackService } = createServices();
+              taskUpdate(task, {
+                status: "downloading",
+                subtitle: "Downloading modpack",
+              });
+              instance = await modpackService.installProject({
+                project,
+                settings: state.settings,
+                instanceId: task.instanceId,
+                onProgress: (progress) =>
+                  taskUpdate(task, {
+                    status:
+                      progress.stage === "pack" ? "downloading" : "installing",
+                    progress: progress.progress,
+                    subtitle: progress.message,
+                    received: progress.received,
+                    total: progress.total,
+                    speed: progress.speed,
+                    eta: progress.eta,
+                  }),
+                signal: controller.signal,
+              });
+            }
             state.instances.unshift(instance);
             taskUpdate(task, {
               status: "done",
@@ -2477,6 +2602,40 @@ function registerIpc() {
     );
     await saveState();
     return structuredClone(state.downloads);
+  });
+
+  ipcMain.handle("curseforge:search", async (_event, query, type, options) => {
+    return curseforgeService.searchCurseForge({
+      query,
+      type,
+      ...options,
+    });
+  });
+  ipcMain.handle("curseforge:mod", async (_event, modId) => {
+    return curseforgeService.getCurseForgeMod(modId);
+  });
+  ipcMain.handle("curseforge:files", async (_event, modId, options) => {
+    return curseforgeService.getCurseForgeFiles(modId, options);
+  });
+  ipcMain.handle("curseforge:description", async (_event, modId) => {
+    return curseforgeService.getCurseForgeDescription(modId);
+  });
+  ipcMain.handle(
+    "curseforge:install-mod",
+    async (_event, instanceId, modId, fileId) => {
+      return curseforgeService.installCurseForgeMod({
+        instancesRoot: state.settings.gameDirectory,
+        instanceId,
+        modId,
+        fileId,
+      });
+    },
+  );
+  ipcMain.handle("curseforge:install-modpack", async (_event, options) => {
+    return curseforgeService.installCurseForgeModpack({
+      instancesRoot: state.settings.gameDirectory,
+      ...options,
+    });
   });
 
   ipcMain.handle("launcher:preflight", async (_event, instanceId) => {
@@ -2854,6 +3013,22 @@ function registerIpc() {
       });
     },
   );
+
+  ipcMain.handle("updater:check", async () => {
+    return updaterService.checkForUpdate(app.getVersion());
+  });
+
+  ipcMain.handle("updater:download", async () => {
+    return updaterService.downloadUpdate({
+      onProgress: (progress) => {
+        send("updater:progress", progress);
+      },
+    });
+  });
+
+  ipcMain.handle("updater:install", async () => {
+    return updaterService.applyUpdate();
+  });
 }
 
 const gotLock = app.requestSingleInstanceLock();
@@ -2874,12 +3049,35 @@ if (!gotLock) {
     if (storedProfile) {
       state.profile = storedProfile;
       await saveState();
-    } else if (state.profile.kind === "microsoft") {
+    } else if (state.profile.kind === "microsoft" && !process.env.ONYX_CAPTURE_PATH) {
       state.profile = structuredClone(DEFAULT_STATE.profile);
       await saveState();
     }
     registerIpc();
     await createWindow();
+
+    updaterService.downloadDirectory = path.join(app.getPath("temp"), "onyx-updates");
+    updaterService.currentVersion = app.getVersion();
+
+    if (state.settings.autoCheckUpdates) {
+      setTimeout(async () => {
+        try {
+          const update = await updaterService.checkForUpdate(app.getVersion());
+          if (update && update.updateAvailable) {
+            if (state.settings.notifications && Notification.isSupported()) {
+              new Notification({
+                title: "Onyx Launcher Update",
+                body: `Version ${update.latestVersion} is available to install.`,
+                silent: false,
+              }).show();
+            }
+            send("updater:available", update);
+          }
+        } catch {
+          // background update check failed silently
+        }
+      }, 3000);
+    }
 
     void telemetryService.trackAppLaunch({
       distinctId: state.settings.anonymousClientId,

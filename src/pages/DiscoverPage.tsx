@@ -3,24 +3,26 @@ import { motion } from "framer-motion";
 import {
   Check,
   Download,
-  ExternalLink,
   Flame,
   Gamepad2,
+  Info,
   LoaderCircle,
   PackagePlus,
   Search,
-  ShieldCheck,
   SlidersHorizontal,
   Star,
   WandSparkles,
 } from "lucide-react";
+import { ProjectDetailModal } from "../components/ProjectDetailModal";
+import { CurseForgeIcon, ModrinthIcon } from "../components/ProviderIcons";
 import { fallbackProjects } from "../data";
 import { useI18n } from "../i18n";
 import type {
   CatalogProject,
   DownloadTask,
-  RouteId,
+  GameInstance,
   MinecraftVersion,
+  RouteId,
 } from "../types";
 import { compactNumber } from "../utils";
 
@@ -29,6 +31,7 @@ interface DiscoverPageProps {
   onInstall: (project: CatalogProject) => void;
   onNavigate: (route: RouteId) => void;
   versions: MinecraftVersion[];
+  instances?: GameInstance[];
 }
 
 type ProjectType = "modpack" | "mod";
@@ -38,9 +41,12 @@ export function DiscoverPage({
   onInstall,
   onNavigate,
   versions,
+  instances = [],
 }: DiscoverPageProps) {
   const { locale, t } = useI18n();
+  const [selectedProject, setSelectedProject] = useState<CatalogProject | null>(null);
   const [query, setQuery] = useState("");
+  const [source, setSource] = useState<"modrinth" | "curseforge">("modrinth");
   const [projectType, setProjectType] = useState<ProjectType>("modpack");
   const [projects, setProjects] = useState<CatalogProject[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,6 +65,7 @@ export function DiscoverPage({
       setLoading(true);
       try {
         const response = await window.onyx.catalog.search(query, projectType, {
+          source,
           version: gameVersion || undefined,
           loader: loader || undefined,
           index: query && sort === "downloads" ? "relevance" : sort,
@@ -90,12 +97,13 @@ export function DiscoverPage({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [gameVersion, loader, projectType, query, sort]);
+  }, [gameVersion, loader, projectType, query, sort, source]);
 
   const loadMore = async () => {
     setLoadingMore(true);
     try {
       const response = await window.onyx.catalog.search(query, projectType, {
+        source,
         version: gameVersion || undefined,
         loader: loader || undefined,
         index: query && sort === "downloads" ? "relevance" : sort,
@@ -142,9 +150,26 @@ export function DiscoverPage({
           <h1>{t("discover.title")}</h1>
           <p>{t("discover.subtitle")}</p>
         </div>
-        <div className="source-pill">
-          <ShieldCheck size={14} />
-          {t("discover.source")}
+        <div className="provider-toggle">
+          <button
+            type="button"
+            className={`provider-chip ${source === "modrinth" ? "is-active provider-chip--modrinth" : ""}`}
+            onClick={() => setSource("modrinth")}
+            title="Browse Modrinth community catalog"
+          >
+            <ModrinthIcon size={16} />
+            <span>Modrinth</span>
+          </button>
+          <button
+            type="button"
+            className={`provider-chip ${source === "curseforge" ? "is-active provider-chip--curseforge" : ""}`}
+            data-capture-target="curseforge-toggle"
+            onClick={() => setSource("curseforge")}
+            title="Browse CurseForge official repository"
+          >
+            <CurseForgeIcon size={16} />
+            <span>CurseForge</span>
+          </button>
         </div>
       </div>
 
@@ -264,7 +289,11 @@ export function DiscoverPage({
 
       {featured && (
         <section className="catalog-feature">
-          <div className="catalog-feature__art">
+          <div
+            className="catalog-feature__art"
+            style={{ cursor: "pointer" }}
+            onClick={() => setSelectedProject(featured)}
+          >
             {featured.icon_url ? (
               <img
                 src={featured.icon_url}
@@ -278,11 +307,31 @@ export function DiscoverPage({
             <div />
           </div>
           <div className="catalog-feature__copy">
-            <div className="catalog-feature__label">
-              <Flame size={14} />
-              {t("discover.trending")}
+            <div className="catalog-feature__top-row" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+              <div className="catalog-feature__label">
+                <Flame size={14} />
+                {t("discover.trending")}
+              </div>
+              <span className={`source-tag source-tag--${featured.source || "modrinth"}`}>
+                {featured.source === "curseforge" ? (
+                  <>
+                    <CurseForgeIcon size={12} className="source-tag__icon" />
+                    CurseForge
+                  </>
+                ) : (
+                  <>
+                    <ModrinthIcon size={12} className="source-tag__icon" />
+                    Modrinth
+                  </>
+                )}
+              </span>
             </div>
-            <h2>{featured.title}</h2>
+            <h2
+              style={{ cursor: "pointer" }}
+              onClick={() => setSelectedProject(featured)}
+            >
+              {featured.title}
+            </h2>
             <p>{projectDescription(featured)}</p>
             <div className="catalog-feature__meta">
               <span>
@@ -301,14 +350,10 @@ export function DiscoverPage({
               />
               <button
                 className="button button--glass"
-                onClick={() =>
-                  window.open(
-                    `https://modrinth.com/${featured.project_type}/${featured.slug}`,
-                    "_blank",
-                  )
-                }
+                data-capture-target="project-details"
+                onClick={() => setSelectedProject(featured)}
               >
-                <ExternalLink size={15} /> {t("discover.details")}
+                <Info size={15} /> {t("discover.details")}
               </button>
             </div>
           </div>
@@ -342,14 +387,21 @@ export function DiscoverPage({
               const task = installState(project.project_id);
               return (
                 <motion.article
-                  className="project-card"
+                  className="project-card project-card--clickable"
                   key={project.project_id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: Math.min(index * 0.025, 0.2) }}
+                  onClick={() => setSelectedProject(project)}
                 >
                   <div className="project-card__head">
-                    <span className="project-card__icon">
+                    <span
+                      className="project-card__icon"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedProject(project);
+                      }}
+                    >
                       {project.icon_url ? (
                         <img
                           src={project.icon_url}
@@ -362,7 +414,15 @@ export function DiscoverPage({
                       )}
                     </span>
                     <div>
-                      <h3 title={project.title}>{project.title}</h3>
+                      <h3
+                        title={project.title}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedProject(project);
+                        }}
+                      >
+                        <span style={{ cursor: "pointer" }}>{project.title}</span>
+                      </h3>
                       <p>{t("discover.by", { author: project.author })}</p>
                     </div>
                   </div>
@@ -370,6 +430,21 @@ export function DiscoverPage({
                     {projectDescription(project)}
                   </p>
                   <div className="project-card__tags">
+                    <span
+                      className={`source-tag source-tag--${project.source || "modrinth"}`}
+                    >
+                      {project.source === "curseforge" ? (
+                        <>
+                          <CurseForgeIcon size={12} className="source-tag__icon" />
+                          CurseForge
+                        </>
+                      ) : (
+                        <>
+                          <ModrinthIcon size={12} className="source-tag__icon" />
+                          Modrinth
+                        </>
+                      )}
+                    </span>
                     {project.categories.slice(0, 3).map((category) => (
                       <span key={category}>{category}</span>
                     ))}
@@ -389,7 +464,10 @@ export function DiscoverPage({
                       className={`project-install ${
                         task?.status === "done" ? "is-done" : ""
                       }`}
-                      onClick={() => onInstall(project)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onInstall(project);
+                      }}
                       disabled={
                         offline ||
                         task?.status === "downloading" ||
@@ -429,6 +507,14 @@ export function DiscoverPage({
           )}
         </section>
       )}
+
+      <ProjectDetailModal
+        project={selectedProject}
+        onClose={() => setSelectedProject(null)}
+        onInstall={onInstall}
+        downloads={downloads}
+        instances={instances}
+      />
     </motion.div>
   );
 }

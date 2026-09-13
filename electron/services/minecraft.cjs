@@ -209,17 +209,28 @@ function replaceVariables(value, variables) {
   );
 }
 
+function libraryKey(library) {
+  const name = typeof library === "string" ? library : library?.name;
+  if (!name || typeof name !== "string") return "";
+  const [coordinate] = name.split("@");
+  const parts = coordinate.split(":");
+  if (parts.length < 3) return coordinate;
+  const [group, artifact] = parts;
+  const classifier = parts.slice(3).join(":");
+  return classifier ? `${group}:${artifact}:${classifier}` : `${group}:${artifact}`;
+}
+
 function mergeVersion(parent, child) {
-  const libraries = new Map();
-  for (const library of [...(parent.libraries || []), ...(child.libraries || [])]) {
-    libraries.set(library.name, library);
-  }
+  const childKeys = new Set((child.libraries || []).map(libraryKey));
+  const parentFiltered = (parent.libraries || []).filter(
+    (lib) => !childKeys.has(libraryKey(lib)),
+  );
   return {
     ...parent,
     ...child,
     id: child.id,
     jar: child.jar || parent.jar || parent.id,
-    libraries: [...libraries.values()],
+    libraries: [...(child.libraries || []), ...parentFiltered],
     arguments: {
       jvm: [
         ...(parent.arguments?.jvm || []),
@@ -841,13 +852,22 @@ class MinecraftService {
       version.inheritsFrom || version.jar || instance.version,
     );
     const libraries = [];
+    const seenPaths = new Set();
+    const seenKeys = new Set();
     for (const library of version.libraries || []) {
       if (!applyRules(library.rules)) continue;
       if (library.natives && !library.downloads?.artifact) continue;
+      const key = libraryKey(library);
+      if (key && seenKeys.has(key)) continue;
       try {
         const artifact = libraryArtifact(library);
         const filePath = path.join(this.sharedRoot, "libraries", artifact.path);
-        if (fs.existsSync(filePath)) libraries.push(filePath);
+        if (seenPaths.has(filePath)) continue;
+        if (fs.existsSync(filePath)) {
+          if (key) seenKeys.add(key);
+          seenPaths.add(filePath);
+          libraries.push(filePath);
+        }
       } catch {
         // Ignore native-only or malformed optional library.
       }
@@ -859,7 +879,10 @@ class MinecraftService {
       jarId,
       `${jarId}.jar`,
     );
-    libraries.push(clientJar);
+    if (!seenPaths.has(clientJar)) {
+      seenPaths.add(clientJar);
+      libraries.push(clientJar);
+    }
     const classpath = libraries.join(path.delimiter);
 
     const localName = account?.name || "Player";
@@ -1040,6 +1063,8 @@ module.exports = {
   MinecraftService,
   applyRules,
   mavenArtifact,
+  libraryKey,
+  mergeVersion,
   expandArguments,
   replaceVariables,
   loaderInfo,

@@ -5,10 +5,11 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useState,
   type ReactNode,
 } from "react";
 
-export type Locale = "en";
+export type Locale = "en" | "ru";
 export type TranslationValues = Record<string, string | number>;
 
 const en = {
@@ -376,7 +377,9 @@ const en = {
   "discover.eyebrow": "COMMUNITY CATALOG",
   "discover.title": "Discover",
   "discover.subtitle": "Great modpacks and mods without clutter or endless tabs",
-  "discover.source": "Modrinth catalog",
+  "discover.source": "Catalog provider",
+  "discover.source.modrinth": "Modrinth",
+  "discover.source.curseforge": "CurseForge",
   "discover.searchPacks": "Find the perfect modpack…",
   "discover.searchMods": "Find a mod…",
   "discover.modpacks": "Modpacks",
@@ -412,6 +415,49 @@ const en = {
   "discover.fallback.cobblemon": "Explore the world, collect creatures, and fight tactical battles.",
   "discover.fallback.create": "An engineering sandbox with machines, factories, trains, and beautiful builds.",
   "discover.fallback.vanilla": "Native Minecraft feel with fast rendering and careful improvements.",
+
+  "projectDetail.overview": "Overview",
+  "projectDetail.versions": "Versions",
+  "projectDetail.gallery": "Gallery",
+  "projectDetail.install": "Install",
+  "projectDetail.installVersion": "Install Version",
+  "projectDetail.installModpack": "Install Modpack",
+  "projectDetail.installMod": "Install Mod",
+  "projectDetail.openBrowser": "Open in Browser",
+  "projectDetail.close": "Close",
+  "projectDetail.downloads": "Downloads",
+  "projectDetail.followers": "Followers",
+  "projectDetail.updated": "Updated",
+  "projectDetail.license": "License",
+  "projectDetail.clientSide": "Client",
+  "projectDetail.serverSide": "Server",
+  "projectDetail.environment": "Environment",
+  "projectDetail.supportedVersions": "Supported Versions",
+  "projectDetail.supportedLoaders": "Supported Loaders",
+  "projectDetail.links": "Links",
+  "projectDetail.wiki": "Wiki",
+  "projectDetail.source": "Source Code",
+  "projectDetail.issues": "Issues",
+  "projectDetail.discord": "Discord",
+  "projectDetail.filterVersion": "Minecraft Version",
+  "projectDetail.filterLoader": "Loader",
+  "projectDetail.allVersions": "All Versions",
+  "projectDetail.anyLoader": "Any Loader",
+  "projectDetail.noVersions": "No versions match the selected filters.",
+  "projectDetail.release": "Release",
+  "projectDetail.beta": "Beta",
+  "projectDetail.alpha": "Alpha",
+  "projectDetail.loading": "Loading details…",
+  "projectDetail.loadingVersions": "Loading versions…",
+  "projectDetail.inLibrary": "Installed",
+  "projectDetail.installing": "Installing…",
+  "projectDetail.queued": "Queued",
+  "projectDetail.selectInstance": "Select an instance to install into",
+  "projectDetail.noInstances": "No instances available. Create an instance first.",
+  "projectDetail.modpack": "Modpack",
+  "projectDetail.mod": "Mod",
+  "projectDetail.resourcepack": "Resource Pack",
+  "projectDetail.shader": "Shader",
 
   "picks.title": "A shortlist without the lottery",
   "picks.subtitle": "Not the whole catalog—just a few packs for a specific mood and a specific PC",
@@ -1221,6 +1267,65 @@ const en = {
 
 export type TranslationKey = keyof typeof en;
 
+const ru: Partial<Record<TranslationKey, string>> = {
+  "common.close": "Закрыть",
+  "common.back": "Назад",
+  "common.continue": "Продолжить",
+  "common.done": "Готово",
+  "common.saved": "Сохранено",
+  "common.check": "Проверить",
+  "common.retry": "Повторить",
+  "common.choose": "Выбрать",
+  "common.change": "Изменить",
+  "common.open": "Открыть",
+  "common.available": "Доступно",
+  "common.unavailable": "Недоступно",
+  "common.files": "файлов",
+  "common.hours": "ч",
+  "projectDetail.overview": "Обзор",
+  "projectDetail.versions": "Версии",
+  "projectDetail.gallery": "Галерея",
+  "projectDetail.install": "Установить",
+  "projectDetail.installVersion": "Установить версию",
+  "projectDetail.installModpack": "Установить модпак",
+  "projectDetail.installMod": "Установить мод",
+  "projectDetail.openBrowser": "Открыть в браузере",
+  "projectDetail.close": "Закрыть",
+  "projectDetail.downloads": "Скачивания",
+  "projectDetail.followers": "Подписчики",
+  "projectDetail.updated": "Обновлено",
+  "projectDetail.license": "Лицензия",
+  "projectDetail.clientSide": "Клиент",
+  "projectDetail.serverSide": "Сервер",
+  "projectDetail.environment": "Окружение",
+  "projectDetail.supportedVersions": "Поддерживаемые версии",
+  "projectDetail.supportedLoaders": "Загрузчики",
+  "projectDetail.links": "Ссылки",
+  "projectDetail.wiki": "Вики",
+  "projectDetail.source": "Исходный код",
+  "projectDetail.issues": "Баг-трекер",
+  "projectDetail.discord": "Discord",
+  "projectDetail.filterVersion": "Версия Minecraft",
+  "projectDetail.filterLoader": "Загрузчик",
+  "projectDetail.allVersions": "Все версии",
+  "projectDetail.anyLoader": "Любой загрузчик",
+  "projectDetail.noVersions": "Нет версий, подходящих под выбранные фильтры.",
+  "projectDetail.release": "Релиз",
+  "projectDetail.beta": "Бета",
+  "projectDetail.alpha": "Альфа",
+  "projectDetail.loading": "Загрузка информации…",
+  "projectDetail.loadingVersions": "Загрузка версий…",
+  "projectDetail.inLibrary": "Установлено",
+  "projectDetail.installing": "Установка…",
+  "projectDetail.queued": "В очереди",
+  "projectDetail.selectInstance": "Выберите сборку для установки",
+  "projectDetail.noInstances": "Нет доступных сборок. Сначала создайте сборку.",
+  "projectDetail.modpack": "Модпак",
+  "projectDetail.mod": "Мод",
+  "projectDetail.resourcepack": "Ресурспак",
+  "projectDetail.shader": "Шейдер",
+};
+
 function interpolate(message: string, values?: TranslationValues) {
   if (!values) return message;
   return message.replace(/\{(\w+)\}/g, (match, key: string) =>
@@ -1229,11 +1334,12 @@ function interpolate(message: string, values?: TranslationValues) {
 }
 
 export function translate(
-  _locale: Locale,
+  locale: Locale,
   key: TranslationKey,
   values?: TranslationValues,
 ) {
-  return interpolate(en[key] ?? key, values);
+  const message = (locale === "ru" ? ru[key] : undefined) ?? en[key] ?? key;
+  return interpolate(message, values);
 }
 
 interface I18nValue {
@@ -1245,22 +1351,28 @@ interface I18nValue {
 const I18nContext = createContext<I18nValue | null>(null);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const locale: Locale = "en";
+  const [locale, setLocaleState] = useState<Locale>(() => {
+    const saved = window.localStorage.getItem("onyx.locale");
+    return saved === "ru" ? "ru" : "en";
+  });
 
-  const setLocale = useCallback((_next: Locale) => {
-    window.localStorage.setItem("onyx.locale", "en");
+  const setLocale = useCallback((next: Locale) => {
+    setLocaleState(next);
+    window.localStorage.setItem("onyx.locale", next);
+    document.documentElement.lang = next;
+    document.documentElement.dataset.locale = next;
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem("onyx.locale", "en");
-    document.documentElement.lang = "en";
-    document.documentElement.dataset.locale = "en";
+    const saved = (window.localStorage.getItem("onyx.locale") as Locale) || "en";
+    document.documentElement.lang = saved;
+    document.documentElement.dataset.locale = saved;
   }, []);
 
   const t = useCallback(
     (key: TranslationKey, values?: TranslationValues) =>
-      translate("en", key, values),
-    [],
+      translate(locale, key, values),
+    [locale],
   );
 
   const value = useMemo(
