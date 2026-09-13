@@ -5,11 +5,21 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Good First Issues](https://img.shields.io/github/issues/lonestill/onyx-launcher/good%20first%20issue?color=7057ff&label=good%20first%20issues)](https://github.com/lonestill/onyx-launcher/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
 [![Scoop](https://img.shields.io/badge/Scoop-lonestill%2Fscoop--onyx-4b89dc)](https://github.com/lonestill/scoop-onyx)
-[![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/qHZCehveYp)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/qHZCehveYp)
 
-A modern, English-only Minecraft launcher for Windows and Linux, built with Electron, React, and TypeScript. Onyx keeps game instances isolated, installs official Minecraft files and popular mod loaders, integrates with Modrinth, and launches every instance with its own Java and performance settings.
+A modern, fast, zero-bloat Minecraft launcher for Windows and Linux, built with Electron, React, and TypeScript. Onyx features 1-click universal migration from all major launchers, built-in 3D skin & cape studio, automated crash bisect diagnostics, and isolated instance management.
 
-[Download the latest release](https://github.com/lonestill/onyx-launcher/releases/latest) · [Discord Community](https://discord.gg/qHZCehveYp) · [Good first issues](https://github.com/lonestill/onyx-launcher/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22) · [Contribute](CONTRIBUTING.md) · [Share an idea](https://github.com/lonestill/onyx-launcher/discussions/categories/ideas)
+[Download the latest release (v1.6.11)](https://github.com/lonestill/onyx-launcher/releases/latest) · [💬 Discord Community](https://discord.gg/qHZCehveYp) · [Good first issues](https://github.com/lonestill/onyx-launcher/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22) · [Contribute](CONTRIBUTING.md)
+
+## 💬 Community & Support
+
+Got questions, hit a crash, want to suggest a feature, or test upcoming beta builds? Join our official Discord server:
+
+[![Join Discord](https://img.shields.io/badge/Discord-Join%20Onyx%20Community-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/qHZCehveYp)
+
+- 🚨 **Instant Crash Troubleshooting**: Paste logs and get help directly from the developers.
+- 🧪 **Beta Testing**: Test new engine updates, memory tweaks, and performance tools before release.
+- 💡 **Ideas & Feedback**: Share suggestions and discuss what gets built next.
 
 ## Screenshots
 

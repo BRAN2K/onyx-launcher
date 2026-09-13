@@ -6,7 +6,7 @@ labels:
 body:
   - type: markdown
     attributes:
-      value: Thanks for taking the time to report a problem. Remove tokens, email addresses, server IPs, and personal paths from logs before attaching them.
+      value: "Thanks for taking the time to report a problem. Need quick help or troubleshooting? You can also ask directly in our [Discord Server](https://discord.gg/qHZCehveYp). Please remove tokens, email addresses, and personal paths from logs before attaching them."
   - type: input
     id: version
     attributes:

@@ -1,1 +1,5 @@
 blank_issues_enabled: false
+contact_links:
+  - name: 💬 Discord Community & Instant Support
+    url: https://discord.gg/qHZCehveYp
+    about: Ask questions, get fast crash troubleshooting, or chat with developers!
