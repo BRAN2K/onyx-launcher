@@ -380,11 +380,11 @@ export function ResourcePack3DViewer({
             </div>
             <div>
               <div className="rpack-badge-row">
-                <span className="lzt-tag lzt-tag--green">3D WebGL Engine</span>
+                <span className="rpack-tag rpack-tag--green">3D WebGL Engine</span>
                 {packData.packFormat ? (
-                  <span className="lzt-tag">Формат {packData.packFormat}</span>
+                  <span className="rpack-tag">Формат {packData.packFormat}</span>
                 ) : null}
-                <span className="lzt-tag">{packData.totalTextures} текстур</span>
+                <span className="rpack-tag">{packData.totalTextures} текстур</span>
               </div>
               <h2>{packData.name}</h2>
             </div>

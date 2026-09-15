@@ -240,19 +240,21 @@ export function DiscoverPage({
             ))}
           </select>
         </label>
-        <label>
-          <small>{t("discover.loader")}</small>
-          <select
-            value={loader}
-            onChange={(event) => setLoader(event.target.value)}
-          >
-            <option value="">{t("discover.any")}</option>
-            <option value="fabric">Fabric</option>
-            <option value="neoforge">NeoForge</option>
-            <option value="forge">Forge</option>
-            <option value="quilt">Quilt</option>
-          </select>
-        </label>
+        {projectType !== "resourcepack" && (
+          <label>
+            <small>{t("discover.loader")}</small>
+            <select
+              value={loader}
+              onChange={(event) => setLoader(event.target.value)}
+            >
+              <option value="">{t("discover.any")}</option>
+              <option value="fabric">Fabric</option>
+              <option value="neoforge">NeoForge</option>
+              <option value="forge">Forge</option>
+              <option value="quilt">Quilt</option>
+            </select>
+          </label>
+        )}
         <label>
           <small>{t("discover.sort")}</small>
           <select
@@ -391,7 +393,11 @@ export function DiscoverPage({
               <p>
                 {projectType === "modpack"
                   ? t("discover.packsHint")
-                  : t("discover.modsHint")}
+                  : projectType === "resourcepack"
+                    ? (locale === "ru" ? "Текстуры и визуальные паки в один клик" : "Textures and visuals in one click")
+                    : projectType === "shader"
+                      ? (locale === "ru" ? "Реалистичное освещение и эффекты" : "Realistic lighting and shaders")
+                      : t("discover.modsHint")}
                 {total > 0 && ` · ${t("discover.found", { count: total.toLocaleString("en-US") })}`}
               </p>
             </div>

@@ -2299,12 +2299,15 @@ function registerIpc() {
   });
 
   ipcMain.handle("catalog:search", async (_event, query, projectType, options = {}) => {
+    const allowedTypes = ["mod", "modpack", "resourcepack", "shader"];
+    const type = allowedTypes.includes(projectType) ? projectType : "mod";
+
     if (options.source === "curseforge") {
       return curseforgeService.searchCurseForge({
         query: query || "",
-        type: projectType,
+        type: type,
         gameVersion: options.version,
-        loader: options.loader,
+        loader: type === "resourcepack" ? undefined : options.loader,
         index: options.offset || 0,
         pageSize: 24,
         sortField:
@@ -2316,20 +2319,11 @@ function registerIpc() {
                 ? 1
                 : 2,
       });
-    }
-    const type =
-      projectType === "resourcepack"
-        ? "resourcepack"
-        : projectType === "shader"
-          ? "shader"
-          : projectType === "mod"
-            ? "mod"
-            : "modpack";
     const facets = [[`project_type:${type}`]];
     if (/^[a-zA-Z0-9._+-]{1,32}$/.test(options.version || "")) {
       facets.push([`versions:${options.version}`]);
     }
-    if (/^[a-zA-Z0-9_-]{1,32}$/.test(options.loader || "")) {
+    if (type !== "resourcepack" && /^[a-zA-Z0-9_-]{1,32}$/.test(options.loader || "")) {
       facets.push([`categories:${options.loader}`]);
     }
     const indexes = new Set([

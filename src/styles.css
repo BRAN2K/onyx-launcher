@@ -9282,6 +9282,26 @@ html[data-motion="reduced"] *::after {
   margin-bottom: 4px;
 }
 
+.rpack-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-muted);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  letter-spacing: 0.02em;
+}
+
+.rpack-tag--green {
+  background: rgba(56, 214, 143, 0.15);
+  color: #38d68f;
+  border-color: rgba(56, 214, 143, 0.35);
+}
+
 .rpack-preview-title-box h2 {
   margin: 0;
   font-size: 1.12rem;
