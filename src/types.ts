@@ -713,6 +713,38 @@ export interface UpdateProgress {
   eta?: number | null;
 }
 
+export interface ResourcePackBlockPreview {
+  id: string;
+  name: string;
+  transparent?: boolean;
+  textures: {
+    top: string;
+    bottom?: string;
+    sides?: string;
+    front?: string;
+    back?: string;
+    left?: string;
+    right?: string;
+  };
+}
+
+export interface ResourcePackItemPreview {
+  id: string;
+  name: string;
+  texture: string;
+}
+
+export interface ResourcePackInspectResult {
+  name: string;
+  description?: string;
+  packFormat?: number;
+  iconDataUrl?: string | null;
+  blocks: ResourcePackBlockPreview[];
+  items: ResourcePackItemPreview[];
+  totalTextures: number;
+  tempFilePath?: string;
+}
+
 export interface OnyxBridge {
   window: {
     minimize(): Promise<void>;
@@ -879,7 +911,7 @@ export interface OnyxBridge {
     picks(): Promise<OnyxPick[]>;
     search(
       query: string,
-      projectType: "modpack" | "mod",
+      projectType: "modpack" | "mod" | "resourcepack" | "shader",
       options?: {
         version?: string;
         loader?: string;
@@ -984,6 +1016,19 @@ export interface OnyxBridge {
     install(): Promise<boolean>;
     onProgress(callback: (progress: UpdateProgress) => void): () => void;
     onUpdateAvailable?(callback: (info: UpdateInfo) => void): () => void;
+  };
+  resourcepack: {
+    inspect(filePath: string): Promise<ResourcePackInspectResult>;
+    downloadAndInspect(options: {
+      url: string;
+      projectId?: string;
+    }): Promise<ResourcePackInspectResult>;
+    cleanupPreview(tempFilePath: string): Promise<void>;
+    installPreview(options: {
+      tempFilePath: string;
+      instanceId: string;
+      filename?: string;
+    }): Promise<string>;
   };
   onDownloadProgress(
     callback: (progress: DownloadProgress) => void,

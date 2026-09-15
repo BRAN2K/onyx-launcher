@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
+  Box,
   Check,
   Download,
   Flame,
@@ -10,6 +11,7 @@ import {
   PackagePlus,
   Search,
   SlidersHorizontal,
+  Sparkles,
   Star,
   WandSparkles,
 } from "lucide-react";
@@ -34,7 +36,7 @@ interface DiscoverPageProps {
   instances?: GameInstance[];
 }
 
-type ProjectType = "modpack" | "mod";
+type ProjectType = "modpack" | "mod" | "resourcepack" | "shader";
 
 export function DiscoverPage({
   downloads,
@@ -182,7 +184,11 @@ export function DiscoverPage({
             placeholder={
               projectType === "modpack"
                 ? t("discover.searchPacks")
-                : t("discover.searchMods")
+                : projectType === "resourcepack"
+                  ? t("discover.searchResourcepacks")
+                  : projectType === "shader"
+                    ? t("discover.searchShaders")
+                    : t("discover.searchMods")
             }
           />
           {loading && <LoaderCircle className="spin" size={18} />}
@@ -200,6 +206,18 @@ export function DiscoverPage({
             onClick={() => setProjectType("mod")}
           >
             <PackagePlus size={15} /> {t("discover.mods")}
+          </button>
+          <button
+            className={projectType === "resourcepack" ? "is-active" : ""}
+            onClick={() => setProjectType("resourcepack")}
+          >
+            <Box size={15} /> {t("discover.resourcepacks")}
+          </button>
+          <button
+            className={projectType === "shader" ? "is-active" : ""}
+            onClick={() => setProjectType("shader")}
+          >
+            <Sparkles size={15} /> {t("discover.shaders")}
           </button>
         </div>
       </div>

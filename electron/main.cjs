@@ -71,6 +71,7 @@ const {
   listModProfiles,
   saveModProfile,
 } = require("./services/mod-profiles.cjs");
+const resourcepackService = require("./services/resourcepack.cjs");
 const {
   createWorldSnapshot,
   listWorldSnapshots,
@@ -2112,6 +2113,30 @@ function registerIpc() {
   });
   ipcMain.handle("system:clear-cache", () => clearInstallerCache());
 
+  ipcMain.handle("resourcepack:inspect", async (_event, filePath) => {
+    return resourcepackService.inspectResourcePack(filePath);
+  });
+
+  ipcMain.handle("resourcepack:download-and-inspect", async (_event, { url, projectId }) => {
+    return resourcepackService.downloadAndInspectResourcePack({ url, projectId });
+  });
+
+  ipcMain.handle("resourcepack:cleanup-preview", async (_event, tempFilePath) => {
+    return resourcepackService.cleanupPreviewPack(tempFilePath);
+  });
+
+  ipcMain.handle("resourcepack:install-preview", async (_event, { tempFilePath, instanceId, filename }) => {
+    const instance = state.instances.find((i) => i.id === instanceId);
+    if (!instance) throw new Error("Instance not found");
+    const instanceDir = path.join(instancesRoot, instance.id);
+    const destFolder = path.join(instanceDir, "resourcepacks");
+    return resourcepackService.installPreviewPack({
+      tempFilePath,
+      destinationFolder: destFolder,
+      filename,
+    });
+  });
+
   ipcMain.handle("migration:detect", async () => {
     return detectAllInstalledInstances();
   });
@@ -2292,7 +2317,14 @@ function registerIpc() {
                 : 2,
       });
     }
-    const type = projectType === "mod" ? "mod" : "modpack";
+    const type =
+      projectType === "resourcepack"
+        ? "resourcepack"
+        : projectType === "shader"
+          ? "shader"
+          : projectType === "mod"
+            ? "mod"
+            : "modpack";
     const facets = [[`project_type:${type}`]];
     if (/^[a-zA-Z0-9._+-]{1,32}$/.test(options.version || "")) {
       facets.push([`versions:${options.version}`]);

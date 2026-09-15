@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "reac
 import { AnimatePresence, motion } from "framer-motion";
 import {
   BookOpen,
+  Box,
   Calendar,
   Check,
   ChevronLeft,
@@ -29,12 +30,14 @@ import {
   X,
 } from "lucide-react";
 import { CurseForgeIcon, ModrinthIcon } from "./ProviderIcons";
+import { ResourcePack3DViewer } from "./ResourcePack3DViewer";
 import { useI18n } from "../i18n";
 import type {
   CatalogProject,
   DownloadTask,
   GameInstance,
   ProjectGalleryItem,
+  ResourcePackInspectResult,
 } from "../types";
 import { compactNumber, formatBytes } from "../utils";
 
@@ -301,6 +304,10 @@ export function ProjectDetailModal({
     return favorite?.id || instances[0]?.id || "";
   });
 
+  const [previewData, setPreviewData] = useState<ResourcePackInspectResult | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+
   // Close on Escape key
   useEffect(() => {
     if (!project) return;
@@ -311,7 +318,7 @@ export function ProjectDetailModal({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [project, onClose]);
 
-  // Reset tab and active index on project change
+  // Reset tab, preview and active index on project change
   useEffect(() => {
     if (!project) return;
     setActiveTab("overview");
@@ -319,7 +326,71 @@ export function ProjectDetailModal({
     setVersionFilterGame("");
     setVersionFilterLoader("");
     setVersionSearch("");
+    setPreviewData(null);
+    setPreviewError(null);
   }, [project]);
+
+  // Cleanup temporary preview pack on unmount if not installed
+  useEffect(() => {
+    return () => {
+      if (previewData?.tempFilePath) {
+        window.onyx?.resourcepack?.cleanupPreview(previewData.tempFilePath).catch(() => {});
+      }
+    };
+  }, [previewData]);
+
+  const handleOpen3DPreview = useCallback(
+    async (specificUrl?: string) => {
+      if (!project) return;
+      setLoadingPreview(true);
+      setPreviewError(null);
+      try {
+        let targetUrl = specificUrl || null;
+        if (!targetUrl) {
+          const vWithUrl = versions.find((v) => v.downloadUrl);
+          if (vWithUrl?.downloadUrl) {
+            targetUrl = vWithUrl.downloadUrl;
+          } else {
+            const id: string | number =
+              project.source === "curseforge"
+                ? (project.curseforgeId || project.project_id)
+                : project.project_id;
+            const res = await window.onyx.catalog.getVersions(id, project.source, {
+              pageSize: 10,
+            });
+            if (project.source === "curseforge") {
+              const rawFiles = (res || []) as CurseForgeFileRecord[];
+              targetUrl = rawFiles.find((f) => f.downloadUrl)?.downloadUrl || null;
+            } else {
+              const rawVersions = (res || []) as ModrinthVersionRecord[];
+              const v = rawVersions[0];
+              const file = v?.files?.find((f) => f.primary) || v?.files?.[0];
+              targetUrl = file?.url || null;
+            }
+          }
+        }
+
+        if (!targetUrl) {
+          throw new Error("Не удалось найти прямую ссылку на скачивание ресурспака");
+        }
+
+        const inspectResult = await window.onyx.resourcepack.downloadAndInspect({
+          url: targetUrl,
+          projectId: String(project.project_id),
+        });
+
+        setPreviewData(inspectResult);
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : "Ошибка загрузки 3D предпросмотра";
+        console.error("Failed to load resource pack preview:", err);
+        setPreviewError(message);
+      } finally {
+        setLoadingPreview(false);
+      }
+    },
+    [project, versions],
+  );
 
   // Load detailed description & metadata
   useEffect(() => {
@@ -727,6 +798,23 @@ export function ProjectDetailModal({
               </div>
 
               <div className="project-detail__hero-actions">
+                {project.project_type === "resourcepack" && (
+                  <button
+                    type="button"
+                    className="button button--secondary project-detail__preview-btn"
+                    onClick={() => void handleOpen3DPreview()}
+                    disabled={loadingPreview}
+                    title="Интерактивный 3D-просмотр ресурспака в реальном времени"
+                  >
+                    {loadingPreview ? (
+                      <LoaderCircle className="spin" size={16} />
+                    ) : (
+                      <Box size={16} />
+                    )}
+                    <span>{loadingPreview ? "Загрузка 3D..." : "3D Предпросмотр"}</span>
+                  </button>
+                )}
+
                 <button
                   className="button button--primary project-detail__install-btn"
                   onClick={() => onInstall(project)}
@@ -1158,6 +1246,22 @@ export function ProjectDetailModal({
                             </div>
 
                             <div className="version-card__actions">
+                              {project.project_type === "resourcepack" && version.downloadUrl && (
+                                <button
+                                  type="button"
+                                  className="button button--ghost button--sm version-card__preview-btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void handleOpen3DPreview(version.downloadUrl!);
+                                  }}
+                                  disabled={loadingPreview}
+                                  title="3D просмотр этой версии"
+                                >
+                                  <Box size={14} />
+                                  <span>3D</span>
+                                </button>
+                              )}
+
                               <button
                                 className={`button button--sm version-card__install-btn ${
                                   isInstalledThis ? "button--success" : "button--primary"
@@ -1239,6 +1343,14 @@ export function ProjectDetailModal({
           </div>
         </motion.div>
       </motion.div>
+
+      {previewData && (
+        <ResourcePack3DViewer
+          packData={previewData}
+          instances={instances}
+          onClose={() => setPreviewData(null)}
+        />
+      )}
     </AnimatePresence>
   );
 }

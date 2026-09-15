@@ -174,6 +174,15 @@ contextBridge.exposeInMainWorld("onyx", {
       return () => ipcRenderer.removeListener("updater:available", listener);
     },
   },
+  resourcepack: {
+    inspect: (filePath) => ipcRenderer.invoke("resourcepack:inspect", filePath),
+    downloadAndInspect: (options) =>
+      ipcRenderer.invoke("resourcepack:download-and-inspect", options),
+    cleanupPreview: (tempFilePath) =>
+      ipcRenderer.invoke("resourcepack:cleanup-preview", tempFilePath),
+    installPreview: (options) =>
+      ipcRenderer.invoke("resourcepack:install-preview", options),
+  },
   onDownloadProgress: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("download:progress", listener);

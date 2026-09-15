@@ -382,8 +382,12 @@ const en = {
   "discover.source.curseforge": "CurseForge",
   "discover.searchPacks": "Find the perfect modpack…",
   "discover.searchMods": "Find a mod…",
+  "discover.searchResourcepacks": "Find a resource pack…",
+  "discover.searchShaders": "Find a shader pack…",
   "discover.modpacks": "Modpacks",
   "discover.mods": "Mods",
+  "discover.resourcepacks": "Resource Packs",
+  "discover.shaders": "Shaders",
   "discover.filters": "Filters",
   "discover.allVersions": "All versions",
   "discover.loader": "Loader",
@@ -1324,6 +1328,10 @@ const ru: Partial<Record<TranslationKey, string>> = {
   "projectDetail.mod": "Мод",
   "projectDetail.resourcepack": "Ресурспак",
   "projectDetail.shader": "Шейдер",
+  "discover.searchResourcepacks": "Найти ресурспак…",
+  "discover.searchShaders": "Найти шейдеры…",
+  "discover.resourcepacks": "Ресурспаки",
+  "discover.shaders": "Шейдеры",
 };
 
 function interpolate(message: string, values?: TranslationValues) {
