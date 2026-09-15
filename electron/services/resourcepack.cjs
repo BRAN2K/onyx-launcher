@@ -483,6 +483,157 @@ function bufferToDataUrl(buf, mimeType = "image/png") {
 
 const MAX_BLOCKS = 80;
 const MAX_ITEMS = 80;
+const MAX_GUI = 60;
+
+const GUI_TRANSLATIONS = {
+  // Classic GUI containers (both flat and container/ subpath)
+  "inventory": "Инвентарь игрока (Survival Inventory)",
+  "container/inventory": "Инвентарь игрока (Survival Inventory)",
+  "crafting_table": "Верстак (Crafting Table)",
+  "container/crafting_table": "Верстак (Crafting Table)",
+  "furnace": "Печь (Furnace)",
+  "container/furnace": "Печь (Furnace)",
+  "blast_furnace": "Плавильная печь (Blast Furnace)",
+  "container/blast_furnace": "Плавильная печь (Blast Furnace)",
+  "smoker": "Коптильня (Smoker)",
+  "container/smoker": "Коптильня (Smoker)",
+  "generic_54": "Большой сундук (Double Chest)",
+  "container/generic_54": "Большой сундук (Double Chest)",
+  "shulker_box": "Шалкеровый ящик (Shulker Box)",
+  "container/shulker_box": "Шалкеровый ящик (Shulker Box)",
+  "anvil": "Наковальня (Anvil)",
+  "container/anvil": "Наковальня (Anvil)",
+  "enchanting_table": "Стол зачарования (Enchanting Table)",
+  "container/enchanting_table": "Стол зачарования (Enchanting Table)",
+  "brewing_stand": "Зельеварочная стойка (Brewing Stand)",
+  "container/brewing_stand": "Зельеварочная стойка (Brewing Stand)",
+  "beacon": "Маяк (Beacon)",
+  "container/beacon": "Маяк (Beacon)",
+  "hopper": "Воронка (Hopper)",
+  "container/hopper": "Воронка (Hopper)",
+  "dispenser": "Раздатчик / Выбрасыватель (Dispenser)",
+  "container/dispenser": "Раздатчик / Выбрасыватель (Dispenser)",
+  "villager2": "Торговля жителя (Villager Trade)",
+  "container/villager2": "Торговля жителя (Villager Trade)",
+  "merchant": "Торговля жителя (Merchant)",
+  "container/merchant": "Торговля жителя (Merchant)",
+  "grindstone": "Точило (Grindstone)",
+  "container/grindstone": "Точило (Grindstone)",
+  "stonecutter": "Камнерез (Stonecutter)",
+  "container/stonecutter": "Камнерез (Stonecutter)",
+  "cartography_table": "Стол картографа (Cartography Table)",
+  "container/cartography_table": "Стол картографа (Cartography Table)",
+  "smithing": "Стол кузнеца (Smithing Table)",
+  "container/smithing": "Стол кузнеца (Smithing Table)",
+  "loom": "Ткацкий станок (Loom)",
+  "container/loom": "Ткацкий станок (Loom)",
+  "crafter": "Авто-верстак (Crafter)",
+  "container/crafter": "Авто-верстак (Crafter)",
+  "horse": "Интерфейс лошади (Horse GUI)",
+  "container/horse": "Интерфейс лошади (Horse GUI)",
+  "container/creative_inventory/tab_items": "Креативный инвентарь (Items)",
+  "container/creative_inventory/tab_inventory": "Креативный инвентарь (Survival)",
+  "container/creative_inventory/tabs": "Вкладки креатива (Tabs)",
+  "recipe_book": "Книга рецептов (Recipe Book)",
+  "container/recipe_book": "Книга рецептов (Recipe Book)",
+  // Classic HUD & Widgets
+  "widgets": "Хотбар и кнопки (Widgets)",
+  "icons": "Индикаторы здоровья, брони и прицел (Icons)",
+  "bars": "Полосы боссов и опыта (Bars)",
+  "book": "Интерфейс книги (Book GUI)",
+  "demo_background": "Фон демо-меню",
+  // Title / Logos
+  "title/minecraft": "Главный логотип Minecraft",
+  "minecraft": "Главный логотип Minecraft",
+  "title/edition": "Логотип Edition",
+  "title/mojangstudios": "Заставка Mojang Studios",
+  // 1.20.2+ modern sprites
+  "sprites/hud/hotbar": "Хотбар (Hotbar)",
+  "sprites/hud/hotbar_selection": "Выбор слота хотбара",
+  "sprites/hud/crosshair": "Прицел (Crosshair)",
+  "sprites/hud/crosshair_attack_indicator_full": "Индикатор атаки",
+  "sprites/hud/heart/full": "Сердце здоровья",
+  "sprites/hud/heart/hardcore_full": "Сердце хардкора",
+  "sprites/hud/armor_full": "Иконка брони",
+  "sprites/hud/food_full": "Иконка сытости",
+  "sprites/hud/air": "Иконка воздуха",
+  "sprites/hud/experience_bar_background": "Фон полосы опыта",
+  "sprites/hud/experience_bar_progress": "Прогресс полосы опыта",
+  "sprites/hud/jump_bar_background": "Полоса прыжка лошади",
+};
+
+function formatGuiDisplayName(relId) {
+  if (GUI_TRANSLATIONS[relId]) {
+    return GUI_TRANSLATIONS[relId];
+  }
+  const basename = path.basename(relId);
+  if (GUI_TRANSLATIONS[basename]) {
+    return GUI_TRANSLATIONS[basename];
+  }
+  if (basename.includes("tab_top_selected") || basename.includes("tab_bottom_selected")) {
+    return "Вкладка креатива (Выбранная)";
+  }
+  if (basename.includes("tab_top_unselected") || basename.includes("tab_bottom_unselected")) {
+    return "Вкладка креатива";
+  }
+  return basename
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function classifyGuiCategory(relId) {
+  const p = relId.toLowerCase();
+  if (
+    p.includes("container") ||
+    p.includes("inventory") ||
+    p.includes("crafting") ||
+    p.includes("furnace") ||
+    p.includes("chest") ||
+    p.includes("generic_54") ||
+    p.includes("anvil") ||
+    p.includes("shulker") ||
+    p.includes("table") ||
+    p.includes("trade") ||
+    p.includes("villager")
+  ) {
+    return "container";
+  }
+  if (
+    p.includes("hud") ||
+    p.includes("widgets") ||
+    p.includes("icons") ||
+    p.includes("hotbar") ||
+    p.includes("crosshair") ||
+    p.includes("heart") ||
+    p.includes("armor") ||
+    p.includes("food") ||
+    p.includes("bar") ||
+    p.includes("air")
+  ) {
+    return "hud";
+  }
+  if (p.includes("title") || p.includes("logo") || p.includes("mojang")) {
+    return "title";
+  }
+  return "misc";
+}
+
+function scoreGuiPopularity(relId) {
+  const p = relId.toLowerCase();
+  const basename = path.basename(p, ".png");
+  if (basename === "inventory" || p.includes("container/inventory")) return 1000;
+  if (basename === "widgets" || basename === "hotbar" || p.includes("hud/hotbar")) return 950;
+  if (basename === "icons" || basename === "crosshair" || p.includes("hud/crosshair")) return 900;
+  if (basename === "crafting_table" || basename === "furnace" || basename === "generic_54" || basename === "chest") return 850;
+  if (basename === "anvil" || basename === "enchanting_table" || basename === "brewing_stand" || basename === "shulker_box") return 800;
+  if (basename.includes("heart") || basename.includes("armor") || basename.includes("food")) return 750;
+  if (p.includes("title/minecraft") || basename === "minecraft") return 700;
+  if (p.startsWith("container/") || p.includes("/container/")) return 500;
+  if (p.startsWith("sprites/hud/") || p.includes("/hud/")) return 400;
+  if (p.includes("creative_inventory")) return 300;
+  return 100;
+}
 
 async function inspectResourcePack(archivePath) {
   if (!fs.existsSync(archivePath)) {
@@ -524,6 +675,7 @@ async function inspectResourcePack(archivePath) {
     const textureMap = new Map(); // normalized lower key -> entryKey
     const blockCandidates = new Map(); // id -> entryKey
     const itemCandidates = new Map();  // id -> entryKey
+    const guiCandidates = new Map();   // relId -> entryKey
 
     for (const k of entryKeys) {
       if (!k.toLowerCase().endsWith(".png")) continue;
@@ -564,6 +716,16 @@ async function inspectResourcePack(archivePath) {
         const id = iMatch[1];
         if (!itemCandidates.has(id)) {
           itemCandidates.set(id, k);
+        }
+        continue;
+      }
+
+      // GUI texture
+      const gMatch = lower.match(/(?:^|\/)textures\/gui\/(.+)\.png$/);
+      if (gMatch) {
+        const id = gMatch[1];
+        if (!guiCandidates.has(id)) {
+          guiCandidates.set(id, k);
         }
         continue;
       }
@@ -683,6 +845,24 @@ async function inspectResourcePack(archivePath) {
       }
     }
 
+    // 4. Process GUI candidates dynamically
+    const gui = [];
+    const sortedGuiCandidates = Array.from(guiCandidates.entries())
+      .sort(([idA], [idB]) => scoreGuiPopularity(idB) - scoreGuiPopularity(idA));
+
+    for (const [id, entryKey] of sortedGuiCandidates) {
+      if (gui.length >= MAX_GUI) break;
+      const tex = await loadEntryDataUrl(entryKey);
+      if (tex) {
+        gui.push({
+          id,
+          name: formatGuiDisplayName(id),
+          category: classifyGuiCategory(id),
+          texture: tex,
+        });
+      }
+    }
+
     return {
       name: path.basename(archivePath, path.extname(archivePath)),
       description,
@@ -690,6 +870,7 @@ async function inspectResourcePack(archivePath) {
       iconDataUrl,
       blocks,
       items,
+      gui,
       totalTextures: textureMap.size,
     };
   } finally {

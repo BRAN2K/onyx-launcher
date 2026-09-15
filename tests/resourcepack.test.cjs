@@ -102,6 +102,8 @@ test("resourcepack: inspectResourcePack extracts pack info, blocks, and items", 
       "assets/minecraft/textures/block/furnace_side.png": dummyPng,
       "assets/minecraft/textures/item/diamond_sword.png": dummyPng,
       "assets/minecraft/textures/item/golden_apple.png": dummyPng,
+      "assets/minecraft/textures/gui/container/inventory.png": dummyPng,
+      "assets/minecraft/textures/gui/widgets.png": dummyPng,
     });
 
     const res = await inspectResourcePack(packZip);
@@ -110,7 +112,7 @@ test("resourcepack: inspectResourcePack extracts pack info, blocks, and items", 
     assert.equal(res.packFormat, 15);
     assert.equal(res.description, "Faithful 32x for 1.20");
     assert.ok(res.iconDataUrl?.startsWith("data:image/png;base64,"));
-    assert.ok(res.totalTextures >= 6);
+    assert.ok(res.totalTextures >= 8);
 
     // Check diamond ore
     const diamondOre = res.blocks.find((b) => b.id === "diamond_ore");
@@ -132,6 +134,20 @@ test("resourcepack: inspectResourcePack extracts pack info, blocks, and items", 
     const apple = res.items.find((i) => i.id === "golden_apple");
     assert.ok(apple, "Golden apple item should be found");
     assert.equal(apple.name, "Золотое яблоко");
+
+    // Check GUI
+    assert.ok(Array.isArray(res.gui), "GUI array should be present");
+    assert.equal(res.gui.length, 2, "Should extract 2 GUI textures");
+    const inv = res.gui.find((g) => g.id.includes("inventory"));
+    assert.ok(inv, "Inventory GUI should be extracted");
+    assert.equal(inv.name, "Инвентарь игрока (Survival Inventory)");
+    assert.equal(inv.category, "container");
+    assert.ok(inv.texture.startsWith("data:image/png;base64,"));
+
+    const wid = res.gui.find((g) => g.id === "widgets");
+    assert.ok(wid, "Widgets GUI should be extracted");
+    assert.equal(wid.name, "Хотбар и кнопки (Widgets)");
+    assert.equal(wid.category, "hud");
   } finally {
     await fsp.rm(tmpDir, { recursive: true, force: true });
   }

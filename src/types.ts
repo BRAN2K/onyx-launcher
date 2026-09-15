@@ -734,6 +734,13 @@ export interface ResourcePackItemPreview {
   texture: string;
 }
 
+export interface ResourcePackGuiPreview {
+  id: string;
+  name: string;
+  category: "hud" | "container" | "title" | "misc";
+  texture: string;
+}
+
 export interface ResourcePackInspectResult {
   name: string;
   description?: string;
@@ -741,6 +748,7 @@ export interface ResourcePackInspectResult {
   iconDataUrl?: string | null;
   blocks: ResourcePackBlockPreview[];
   items: ResourcePackItemPreview[];
+  gui?: ResourcePackGuiPreview[];
   totalTextures: number;
   tempFilePath?: string;
 }

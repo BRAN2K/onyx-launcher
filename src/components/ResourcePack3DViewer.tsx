@@ -12,6 +12,7 @@ import {
   Pause,
   Play,
   RotateCcw,
+  Search,
   Shield,
   Sparkles,
   Swords,
@@ -22,6 +23,7 @@ import {
 import type {
   GameInstance,
   ResourcePackBlockPreview,
+  ResourcePackGuiPreview,
   ResourcePackInspectResult,
   ResourcePackItemPreview,
 } from "../types";
@@ -45,15 +47,24 @@ export function ResourcePack3DViewer({
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const currentMeshRef = useRef<THREE.Object3D | null>(null);
 
-  const [activeTab, setActiveTab] = useState<"blocks" | "items">(() => {
-    if (packData.blocks.length === 0 && packData.items.length > 0) return "items";
+  const guiList = useMemo(() => packData.gui || [], [packData.gui]);
+
+  const [activeTab, setActiveTab] = useState<"blocks" | "items" | "gui">(() => {
+    if (packData.blocks.length > 0) return "blocks";
+    if (packData.items.length > 0) return "items";
+    if ((packData.gui?.length || 0) > 0) return "gui";
     return "blocks";
   });
+
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedBlockId, setSelectedBlockId] = useState<string>(
     packData.blocks[0]?.id || "",
   );
   const [selectedItemId, setSelectedItemId] = useState<string>(
     packData.items[0]?.id || "",
+  );
+  const [selectedGuiId, setSelectedGuiId] = useState<string>(
+    packData.gui?.[0]?.id || "",
   );
 
   const [autoRotate, setAutoRotate] = useState(true);
@@ -70,14 +81,61 @@ export function ResourcePack3DViewer({
   const autoRotateRef = useRef(autoRotate);
   autoRotateRef.current = autoRotate;
 
+  const searchQueryLower = searchQuery.trim().toLowerCase();
+
+  const filteredBlocks = useMemo(() => {
+    if (!searchQueryLower) return packData.blocks;
+    return packData.blocks.filter(
+      (b) =>
+        b.name.toLowerCase().includes(searchQueryLower) ||
+        b.id.toLowerCase().includes(searchQueryLower),
+    );
+  }, [packData.blocks, searchQueryLower]);
+
+  const filteredItems = useMemo(() => {
+    if (!searchQueryLower) return packData.items;
+    return packData.items.filter(
+      (i) =>
+        i.name.toLowerCase().includes(searchQueryLower) ||
+        i.id.toLowerCase().includes(searchQueryLower),
+    );
+  }, [packData.items, searchQueryLower]);
+
+  const filteredGui = useMemo(() => {
+    if (!searchQueryLower) return guiList;
+    return guiList.filter(
+      (g) =>
+        g.name.toLowerCase().includes(searchQueryLower) ||
+        g.id.toLowerCase().includes(searchQueryLower) ||
+        g.category.toLowerCase().includes(searchQueryLower),
+    );
+  }, [guiList, searchQueryLower]);
+
   const currentBlock = useMemo(
-    () => packData.blocks.find((b) => b.id === selectedBlockId) || packData.blocks[0],
-    [packData.blocks, selectedBlockId],
+    () =>
+      filteredBlocks.find((b) => b.id === selectedBlockId) ||
+      filteredBlocks[0] ||
+      packData.blocks.find((b) => b.id === selectedBlockId) ||
+      packData.blocks[0],
+    [filteredBlocks, packData.blocks, selectedBlockId],
   );
 
   const currentItem = useMemo(
-    () => packData.items.find((i) => i.id === selectedItemId) || packData.items[0],
-    [packData.items, selectedItemId],
+    () =>
+      filteredItems.find((i) => i.id === selectedItemId) ||
+      filteredItems[0] ||
+      packData.items.find((i) => i.id === selectedItemId) ||
+      packData.items[0],
+    [filteredItems, packData.items, selectedItemId],
+  );
+
+  const currentGui = useMemo(
+    () =>
+      filteredGui.find((g) => g.id === selectedGuiId) ||
+      filteredGui[0] ||
+      guiList.find((g) => g.id === selectedGuiId) ||
+      guiList[0],
+    [filteredGui, guiList, selectedGuiId],
   );
 
   // Three.js Scene Setup
@@ -169,6 +227,16 @@ export function ResourcePack3DViewer({
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (rendererRef.current?.domElement) {
+      rendererRef.current.domElement.style.display = activeTab === "gui" ? "none" : "block";
+    }
+    if (activeTab === "gui" && currentMeshRef.current && sceneRef.current) {
+      sceneRef.current.remove(currentMeshRef.current);
+      currentMeshRef.current = null;
+    }
+  }, [activeTab]);
 
   // Texture Loader helper with Minecraft NearestFilter and animation strip cropping
   const loadPixelTexture = (dataUrl: string): THREE.Texture => {
@@ -470,47 +538,115 @@ export function ResourcePack3DViewer({
             onMouseLeave={handleMouseUp}
             onWheel={handleWheel}
           >
-            {/* View Controls Toolbar */}
-            <div className="rpack-stage-toolbar">
-              <button
-                type="button"
-                className={`rpack-tool-btn ${autoRotate ? "is-active" : ""}`}
-                onClick={() => setAutoRotate(!autoRotate)}
-                title={autoRotate ? "Пауза вращения" : "Включить авто-вращение"}
-              >
-                {autoRotate ? <Pause size={13} /> : <Play size={13} />}
-                <span>{autoRotate ? "Вращение" : "Стоп"}</span>
-              </button>
+            {/* View Controls Toolbar (only for 3D tabs) */}
+            {activeTab !== "gui" && (
+              <div className="rpack-stage-toolbar">
+                <button
+                  type="button"
+                  className={`rpack-tool-btn ${autoRotate ? "is-active" : ""}`}
+                  onClick={() => setAutoRotate(!autoRotate)}
+                  title={autoRotate ? "Пауза вращения" : "Включить авто-вращение"}
+                >
+                  {autoRotate ? <Pause size={13} /> : <Play size={13} />}
+                  <span>{autoRotate ? "Вращение" : "Стоп"}</span>
+                </button>
 
-              <button
-                type="button"
-                className="rpack-tool-btn"
-                onClick={handleResetCamera}
-                title="Сбросить камеру"
-              >
-                <RotateCcw size={13} />
-                <span>Сброс</span>
-              </button>
-            </div>
+                <button
+                  type="button"
+                  className="rpack-tool-btn"
+                  onClick={handleResetCamera}
+                  title="Сбросить камеру"
+                >
+                  <RotateCcw size={13} />
+                  <span>Сброс</span>
+                </button>
+              </div>
+            )}
 
-            {/* Hint overlay */}
-            <div className="rpack-stage-hint">
-              <span>Крути мышью · Колесико — зум</span>
-            </div>
+            {/* Hint overlay (only for 3D tabs) */}
+            {activeTab !== "gui" && (
+              <div className="rpack-stage-hint">
+                <span>Крути мышью · Колесико — зум</span>
+              </div>
+            )}
+
+            {/* Dedicated 2D GUI Stage */}
+            {activeTab === "gui" && (
+              <div className="rpack-gui-stage">
+                {currentGui ? (
+                  <div className="rpack-gui-viewport">
+                    <div className="rpack-gui-checker">
+                      <img
+                        src={currentGui.texture}
+                        alt={currentGui.name}
+                        className="rpack-gui-img"
+                      />
+                    </div>
+                    <div className="rpack-gui-meta-bar">
+                      <span className="rpack-tag rpack-tag--green">
+                        {currentGui.category === "container"
+                          ? "Контейнер"
+                          : currentGui.category === "hud"
+                            ? "Хотбар / HUD"
+                            : currentGui.category === "title"
+                              ? "Логотип"
+                              : "Интерфейс"}
+                      </span>
+                      <code className="rpack-gui-id">{currentGui.id}</code>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rpack-empty-list">
+                    <span>
+                      {searchQuery
+                        ? `Ничего не найдено по запросу «${searchQuery}»`
+                        : "В этом ресурспаке нет текстур интерфейса"}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="rpack-stage-current-label">
               <strong>
                 {activeTab === "blocks"
                   ? currentBlock?.name ||
-                    (packData.blocks.length === 0 ? "В ресурспаке нет блоков" : "Выберите блок")
-                  : currentItem?.name ||
-                    (packData.items.length === 0 ? "В ресурспаке нет предметов" : "Выберите предмет")}
+                    (filteredBlocks.length === 0 ? "Блоки не найдены" : "Выберите блок")
+                  : activeTab === "items"
+                    ? currentItem?.name ||
+                      (filteredItems.length === 0 ? "Предметы не найдены" : "Выберите предмет")
+                    : currentGui?.name ||
+                      (filteredGui.length === 0 ? "Интерфейс не найден" : "Выберите элемент")}
               </strong>
             </div>
           </div>
 
           {/* Right: Category Tabs & Selectable Items */}
           <div className="rpack-selector-sidebar">
+            {/* Search bar */}
+            <div className="rpack-search-bar">
+              <div className="rpack-search-input-wrap">
+                <Search size={14} />
+                <input
+                  type="text"
+                  placeholder="Поиск по названию или id..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="rpack-search-input"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    className="rpack-search-clear"
+                    onClick={() => setSearchQuery("")}
+                    title="Очистить"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+            </div>
+
             <div className="rpack-tab-switch">
               <button
                 type="button"
@@ -519,7 +655,7 @@ export function ResourcePack3DViewer({
                 disabled={packData.blocks.length === 0}
               >
                 <Box size={14} />
-                <span>Блоки ({packData.blocks.length})</span>
+                <span>Блоки ({filteredBlocks.length})</span>
               </button>
               <button
                 type="button"
@@ -528,15 +664,24 @@ export function ResourcePack3DViewer({
                 disabled={packData.items.length === 0}
               >
                 <Swords size={14} />
-                <span>Предметы ({packData.items.length})</span>
+                <span>Предметы ({filteredItems.length})</span>
+              </button>
+              <button
+                type="button"
+                className={`rpack-tab-btn ${activeTab === "gui" ? "is-active" : ""}`}
+                onClick={() => setActiveTab("gui")}
+                disabled={guiList.length === 0}
+              >
+                <Layers size={14} />
+                <span>Интерфейс ({filteredGui.length})</span>
               </button>
             </div>
 
-            {/* List of items/blocks */}
+            {/* List of items/blocks/gui */}
             <div className="rpack-elements-scroll">
               {activeTab === "blocks" ? (
-                <div className="rpack-elements-grid">
-                  {packData.blocks.map((block) => (
+                <>
+                  {filteredBlocks.map((block) => (
                     <button
                       key={block.id}
                       type="button"
@@ -548,18 +693,25 @@ export function ResourcePack3DViewer({
                       <div className="rpack-thumb-img">
                         <img src={block.textures.top} alt={block.name} />
                       </div>
-                      <span className="rpack-thumb-name">{block.name}</span>
+                      <div className="rpack-thumb-info">
+                        <span className="rpack-thumb-name">{block.name}</span>
+                        <span className="rpack-thumb-id">{block.id}</span>
+                      </div>
                     </button>
                   ))}
-                  {packData.blocks.length === 0 && (
+                  {filteredBlocks.length === 0 && (
                     <div className="rpack-empty-list">
-                      <span>В этом ресурспаке нет текстур блоков (пак изменяет только предметы или интерфейс)</span>
+                      <span>
+                        {searchQuery
+                          ? `Ничего не найдено по запросу «${searchQuery}»`
+                          : "В этом ресурспаке нет текстур блоков"}
+                      </span>
                     </div>
                   )}
-                </div>
-              ) : (
-                <div className="rpack-elements-grid">
-                  {packData.items.map((item) => (
+                </>
+              ) : activeTab === "items" ? (
+                <>
+                  {filteredItems.map((item) => (
                     <button
                       key={item.id}
                       type="button"
@@ -571,15 +723,52 @@ export function ResourcePack3DViewer({
                       <div className="rpack-thumb-img">
                         <img src={item.texture} alt={item.name} />
                       </div>
-                      <span className="rpack-thumb-name">{item.name}</span>
+                      <div className="rpack-thumb-info">
+                        <span className="rpack-thumb-name">{item.name}</span>
+                        <span className="rpack-thumb-id">{item.id}</span>
+                      </div>
                     </button>
                   ))}
-                  {packData.items.length === 0 && (
+                  {filteredItems.length === 0 && (
                     <div className="rpack-empty-list">
-                      <span>В этом ресурспаке нет текстур предметов (пак изменяет только блоки или окружение)</span>
+                      <span>
+                        {searchQuery
+                          ? `Ничего не найдено по запросу «${searchQuery}»`
+                          : "В этом ресурспаке нет текстур предметов"}
+                      </span>
                     </div>
                   )}
-                </div>
+                </>
+              ) : (
+                <>
+                  {filteredGui.map((guiItem) => (
+                    <button
+                      key={guiItem.id}
+                      type="button"
+                      className={`rpack-thumb-card ${
+                        selectedGuiId === guiItem.id ? "is-selected" : ""
+                      }`}
+                      onClick={() => setSelectedGuiId(guiItem.id)}
+                    >
+                      <div className="rpack-thumb-img rpack-thumb-img--gui">
+                        <img src={guiItem.texture} alt={guiItem.name} />
+                      </div>
+                      <div className="rpack-thumb-info">
+                        <span className="rpack-thumb-name">{guiItem.name}</span>
+                        <span className="rpack-thumb-id">{guiItem.id}</span>
+                      </div>
+                    </button>
+                  ))}
+                  {filteredGui.length === 0 && (
+                    <div className="rpack-empty-list">
+                      <span>
+                        {searchQuery
+                          ? `Ничего не найдено по запросу «${searchQuery}»`
+                          : "В этом ресурспаке нет текстур интерфейса"}
+                      </span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
