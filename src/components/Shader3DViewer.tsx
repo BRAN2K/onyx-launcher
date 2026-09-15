@@ -45,7 +45,9 @@ import texOakLeaves from "../assets/minecraft/oak_leaves_tinted.png";
 import texOakPlanks from "../assets/minecraft/oak_planks.png";
 import texOakPlanksN from "../assets/minecraft/oak_planks_n.png";
 import texSand from "../assets/minecraft/sand.png";
-import texLantern from "../assets/minecraft/lantern.png";
+import texTorchStick from "../assets/minecraft/torch_stick.png";
+import texTorchTop from "../assets/minecraft/torch_top.png";
+import texTorchFlame from "../assets/minecraft/torch_flame.png";
 import texWater from "../assets/minecraft/water_still_frame.png";
 import texPoppy from "../assets/minecraft/poppy.png";
 import texDandelion from "../assets/minecraft/dandelion.png";
@@ -73,7 +75,8 @@ export function Shader3DViewer({
   const sunLightRef = useRef<THREE.DirectionalLight | null>(null);
   const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
   const hemiLightRef = useRef<THREE.HemisphereLight | null>(null);
-  const lanternLightRef = useRef<THREE.PointLight | null>(null);
+  const torchLightRef = useRef<THREE.PointLight | null>(null);
+  const torchFlameGroupRef = useRef<THREE.Group | null>(null);
   const waterMeshRef = useRef<THREE.Mesh | null>(null);
   const leavesMeshesRef = useRef<THREE.Mesh[]>([]);
   const flowerMeshesRef = useRef<THREE.Group[]>([]);
@@ -197,7 +200,9 @@ export function Shader3DViewer({
     const oakPlanksTex = loadPixelTex(texOakPlanks);
     const oakPlanksNTex = loadPixelTex(texOakPlanksN);
     const sandTex = loadPixelTex(texSand);
-    const lanternTex = loadPixelTex(texLantern);
+    const torchStickTex = loadPixelTex(texTorchStick);
+    const torchTopTex = loadPixelTex(texTorchTop);
+    const torchFlameTex = loadPixelTex(texTorchFlame);
     const waterTex = loadPixelTex(texWater);
 
     // Shared Minecraft voxel materials with real textures
@@ -388,42 +393,61 @@ export function Shader3DViewer({
     addFlower(-2.0, 2.0, -1.0, texPoppy);
     flowerMeshesRef.current = flowerGroups;
 
-    // 4. Wooden Fence Post & Real Textured Lantern
-    const fenceGeo = new THREE.BoxGeometry(0.24, 0.95, 0.24);
+    // 4. Wooden Fence Post & Authentic Minecraft Torch
+    const fenceGeo = new THREE.BoxGeometry(0.22, 0.85, 0.22);
     const fenceMesh = new THREE.Mesh(fenceGeo, matPlanks);
-    fenceMesh.position.set(1.4, 1.88, -1.4);
+    fenceMesh.position.set(1.4, 1.925, -1.4);
     fenceMesh.castShadow = true;
     fenceMesh.receiveShadow = true;
     worldGroup.add(fenceMesh);
 
-    // Real lantern mesh with cutout texture and warm glow
-    const lanternGeo = new THREE.BoxGeometry(0.42, 0.56, 0.42);
-    const matLantern = new THREE.MeshStandardMaterial({
-      map: lanternTex,
-      transparent: true,
-      alphaTest: 0.15,
-      roughness: 0.35,
-      emissive: 0xffaa44,
-      emissiveIntensity: 0.9,
-      emissiveMap: lanternTex,
+    // Authentic Minecraft Torch stick (2x10 pixel standard)
+    const torchGeo = new THREE.BoxGeometry(0.125, 0.625, 0.125);
+    const matTorchSide = new THREE.MeshStandardMaterial({
+      map: torchStickTex,
+      roughness: 0.8,
     });
-    const lanternMesh = new THREE.Mesh(lanternGeo, matLantern);
-    lanternMesh.position.set(1.4, 2.5, -1.4);
-    worldGroup.add(lanternMesh);
+    const matTorchTop = new THREE.MeshStandardMaterial({
+      map: torchTopTex,
+      emissive: 0xffaa00,
+      emissiveIntensity: 1.6,
+      roughness: 0.3,
+    });
+    // Box order: [+X, -X, +Y, -Y, +Z, -Z]
+    const torchMats = [matTorchSide, matTorchSide, matTorchTop, matTorchSide, matTorchSide, matTorchSide];
+    const torchMesh = new THREE.Mesh(torchGeo, torchMats);
+    torchMesh.position.set(1.4, 2.6625, -1.4);
+    torchMesh.castShadow = true;
+    worldGroup.add(torchMesh);
 
-    // Glowing core inside lantern
-    const coreGeo = new THREE.BoxGeometry(0.2, 0.26, 0.2);
-    const coreMat = new THREE.MeshBasicMaterial({ color: 0xffdd88 });
-    const coreMesh = new THREE.Mesh(coreGeo, coreMat);
-    coreMesh.position.set(1.4, 2.5, -1.4);
-    worldGroup.add(coreMesh);
+    // Dancing fire flame particle sprite on top of the torch
+    const flameGroup = new THREE.Group();
+    flameGroup.position.set(1.4, 3.02, -1.4);
+    const flameGeo = new THREE.PlaneGeometry(0.24, 0.28);
+    const matFlame = new THREE.MeshBasicMaterial({
+      map: torchFlameTex,
+      transparent: true,
+      alphaTest: 0.1,
+      side: THREE.DoubleSide,
+    });
+    const fp1 = new THREE.Mesh(flameGeo, matFlame);
+    fp1.rotation.y = Math.PI / 4;
+    const fp2 = new THREE.Mesh(flameGeo, matFlame);
+    fp2.rotation.y = -Math.PI / 4;
+    const flameCore = new THREE.Mesh(
+      new THREE.BoxGeometry(0.06, 0.08, 0.06),
+      new THREE.MeshBasicMaterial({ color: 0xfff6c0 })
+    );
+    flameGroup.add(fp1, fp2, flameCore);
+    worldGroup.add(flameGroup);
+    torchFlameGroupRef.current = flameGroup;
 
-    // Lantern point light
-    const lanternLight = new THREE.PointLight(0xff9933, 2.6, 7.5, 1.4);
-    lanternLight.position.set(1.4, 2.55, -1.4);
-    lanternLight.castShadow = true;
-    worldGroup.add(lanternLight);
-    lanternLightRef.current = lanternLight;
+    // Torch warm point light casting dynamic soft shadows
+    const torchLight = new THREE.PointLight(0xff9922, 2.7, 8, 1.4);
+    torchLight.position.set(1.4, 3.05, -1.4);
+    torchLight.castShadow = true;
+    worldGroup.add(torchLight);
+    torchLightRef.current = torchLight;
 
     // 5. Realistic Shader Water Pool with animated texture
     const waterGeo = new THREE.BoxGeometry(1.96, 0.78, 1.96, 16, 1, 16);
@@ -496,10 +520,15 @@ export function Shader3DViewer({
         });
       }
 
-      // Lantern subtle flame flicker
-      if (lanternLightRef.current) {
-        const flicker = Math.sin(elapsed * 8) * 0.15 + Math.cos(elapsed * 14) * 0.1;
-        lanternLightRef.current.intensity = Math.max(1.8, 2.6 + flicker);
+      // Torch animated dancing flame and dynamic flicker
+      if (torchFlameGroupRef.current) {
+        const pulse = 1.0 + Math.sin(elapsed * 12) * 0.08;
+        torchFlameGroupRef.current.scale.set(pulse, 1.0 + Math.cos(elapsed * 10) * 0.1, pulse);
+        torchFlameGroupRef.current.rotation.y = elapsed * 1.5;
+      }
+      if (torchLightRef.current) {
+        const flicker = Math.sin(elapsed * 8) * 0.18 + Math.cos(elapsed * 15) * 0.12;
+        torchLightRef.current.intensity = Math.max(1.8, 2.6 + flicker);
       }
 
       // Animated water flowing UVs & ripple
@@ -827,7 +856,7 @@ export function Shader3DViewer({
                     : timeOfDay === "sunset"
                       ? "🌅 Золотой час · Закатные тени"
                       : timeOfDay === "night"
-                        ? "🌙 Полнолуние · Свет фонаря"
+                        ? "🌙 Полнолуние · Свет факела"
                         : "🌧️ Дождь · Кинематографичный туман"}
               </strong>
             </div>
