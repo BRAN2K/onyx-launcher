@@ -45,7 +45,10 @@ export function ResourcePack3DViewer({
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const currentMeshRef = useRef<THREE.Object3D | null>(null);
 
-  const [activeTab, setActiveTab] = useState<"blocks" | "items">("blocks");
+  const [activeTab, setActiveTab] = useState<"blocks" | "items">(() => {
+    if (packData.blocks.length === 0 && packData.items.length > 0) return "items";
+    return "blocks";
+  });
   const [selectedBlockId, setSelectedBlockId] = useState<string>(
     packData.blocks[0]?.id || "",
   );
@@ -167,10 +170,19 @@ export function ResourcePack3DViewer({
     };
   }, []);
 
-  // Texture Loader helper with Minecraft NearestFilter
+  // Texture Loader helper with Minecraft NearestFilter and animation strip cropping
   const loadPixelTexture = (dataUrl: string): THREE.Texture => {
     const loader = new THREE.TextureLoader();
-    const texture = loader.load(dataUrl);
+    const texture = loader.load(dataUrl, (loadedTex) => {
+      const img = loadedTex.image;
+      if (img && img.height > img.width && img.height % img.width === 0) {
+        const frames = img.height / img.width;
+        // Show first frame: repeat = (1, 1/frames), offset = (0, 1 - 1/frames) for WebGL bottom-left UV origin
+        loadedTex.repeat.set(1, 1 / frames);
+        loadedTex.offset.set(0, 1 - 1 / frames);
+        loadedTex.needsUpdate = true;
+      }
+    });
     texture.magFilter = THREE.NearestFilter;
     texture.minFilter = THREE.NearestFilter;
     texture.colorSpace = THREE.SRGBColorSpace;
@@ -179,9 +191,17 @@ export function ResourcePack3DViewer({
 
   // Build Block Mesh
   useEffect(() => {
-    if (activeTab !== "blocks" || !currentBlock || !sceneRef.current) return;
-
+    if (activeTab !== "blocks" || !sceneRef.current) return;
     const scene = sceneRef.current;
+
+    if (!currentBlock) {
+      if (currentMeshRef.current) {
+        scene.remove(currentMeshRef.current);
+        currentMeshRef.current = null;
+      }
+      return;
+    }
+
     if (currentMeshRef.current) {
       scene.remove(currentMeshRef.current);
     }
@@ -225,55 +245,89 @@ export function ResourcePack3DViewer({
 
   // Build 3D Extruded Voxel Item Mesh
   useEffect(() => {
-    if (activeTab !== "items" || !currentItem || !sceneRef.current) return;
-
+    if (activeTab !== "items" || !sceneRef.current) return;
     const scene = sceneRef.current;
+
+    if (!currentItem) {
+      if (currentMeshRef.current) {
+        scene.remove(currentMeshRef.current);
+        currentMeshRef.current = null;
+      }
+      return;
+    }
+
     if (currentMeshRef.current) {
       scene.remove(currentMeshRef.current);
     }
 
+    let isMounted = true;
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.src = currentItem.texture;
 
     img.onload = () => {
-      const imgWidth = img.width;
-      const imgHeight = img.height;
+      if (!isMounted || !sceneRef.current) return;
+
+      const rawWidth = img.width || 16;
+      let rawHeight = img.height || 16;
+
+      // Handle vertical animation strips (e.g. 16x512)
+      if (rawHeight > rawWidth && rawHeight % rawWidth === 0) {
+        rawHeight = rawWidth;
+      }
+
+      // Limit resolution to 32x32 max to prevent lag on 64x / 128x / 512x HD texture packs
+      const maxDim = 32;
+      let targetW = rawWidth;
+      let targetH = rawHeight;
+      if (targetW > maxDim || targetH > maxDim) {
+        const scale = maxDim / Math.max(targetW, targetH);
+        targetW = Math.max(1, Math.round(targetW * scale));
+        targetH = Math.max(1, Math.round(targetH * scale));
+      }
+
       const canvas = document.createElement("canvas");
-      canvas.width = imgWidth;
-      canvas.height = imgHeight;
+      canvas.width = targetW;
+      canvas.height = targetH;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      ctx.drawImage(img, 0, 0);
-      const imgData = ctx.getImageData(0, 0, imgWidth, imgHeight).data;
+      ctx.imageSmoothingEnabled = false;
+      // Draw first frame onto canvas (downscaled if HD)
+      ctx.drawImage(img, 0, 0, rawWidth, rawHeight, 0, 0, targetW, targetH);
+      const imgData = ctx.getImageData(0, 0, targetW, targetH).data;
 
       const group = new THREE.Group();
-      const pixelSize = 1.8 / Math.max(imgWidth, imgHeight);
-      const thickness = pixelSize * 0.9;
+      const pixelSize = 1.8 / Math.max(targetW, targetH);
+      const thickness = pixelSize * 0.85;
       const boxGeo = new THREE.BoxGeometry(pixelSize, pixelSize, thickness);
 
-      const colorMap = new Map<string, THREE.Vector3>();
+      const matCache = new Map<number, THREE.MeshStandardMaterial>();
 
-      for (let y = 0; y < imgHeight; y++) {
-        for (let x = 0; x < imgWidth; x++) {
-          const idx = (y * imgWidth + x) * 4;
+      for (let y = 0; y < targetH; y++) {
+        for (let x = 0; x < targetW; x++) {
+          const idx = (y * targetW + x) * 4;
           const alpha = imgData[idx + 3];
-          if (alpha > 20) {
-            const r = imgData[idx] / 255;
-            const g = imgData[idx + 1] / 255;
-            const b = imgData[idx + 2] / 255;
+          if (alpha > 25) {
+            const r = imgData[idx];
+            const g = imgData[idx + 1];
+            const b = imgData[idx + 2];
+            const colorHex = (r << 16) | (g << 8) | b;
 
-            const mat = new THREE.MeshStandardMaterial({
-              color: new THREE.Color(r, g, b),
-              roughness: 0.6,
-              metalness: 0.1,
-            });
+            let mat = matCache.get(colorHex);
+            if (!mat) {
+              mat = new THREE.MeshStandardMaterial({
+                color: new THREE.Color(r / 255, g / 255, b / 255),
+                roughness: 0.65,
+                metalness: 0.08,
+              });
+              matCache.set(colorHex, mat);
+            }
 
             const pixelMesh = new THREE.Mesh(boxGeo, mat);
             pixelMesh.position.set(
-              (x - imgWidth / 2) * pixelSize,
-              (imgHeight / 2 - y) * pixelSize,
+              (x - targetW / 2 + 0.5) * pixelSize,
+              (targetH / 2 - y - 0.5) * pixelSize,
               0,
             );
             group.add(pixelMesh);
@@ -286,8 +340,12 @@ export function ResourcePack3DViewer({
       group.rotation.x = 0.2;
       group.position.set(0, 0, 0);
 
-      scene.add(group);
+      sceneRef.current.add(group);
       currentMeshRef.current = group;
+    };
+
+    return () => {
+      isMounted = false;
     };
   }, [activeTab, currentItem]);
 
@@ -443,8 +501,10 @@ export function ResourcePack3DViewer({
             <div className="rpack-stage-current-label">
               <strong>
                 {activeTab === "blocks"
-                  ? currentBlock?.name || "Блок"
-                  : currentItem?.name || "Предмет"}
+                  ? currentBlock?.name ||
+                    (packData.blocks.length === 0 ? "В ресурспаке нет блоков" : "Выберите блок")
+                  : currentItem?.name ||
+                    (packData.items.length === 0 ? "В ресурспаке нет предметов" : "Выберите предмет")}
               </strong>
             </div>
           </div>
@@ -456,6 +516,7 @@ export function ResourcePack3DViewer({
                 type="button"
                 className={`rpack-tab-btn ${activeTab === "blocks" ? "is-active" : ""}`}
                 onClick={() => setActiveTab("blocks")}
+                disabled={packData.blocks.length === 0}
               >
                 <Box size={14} />
                 <span>Блоки ({packData.blocks.length})</span>
@@ -464,6 +525,7 @@ export function ResourcePack3DViewer({
                 type="button"
                 className={`rpack-tab-btn ${activeTab === "items" ? "is-active" : ""}`}
                 onClick={() => setActiveTab("items")}
+                disabled={packData.items.length === 0}
               >
                 <Swords size={14} />
                 <span>Предметы ({packData.items.length})</span>
@@ -491,7 +553,7 @@ export function ResourcePack3DViewer({
                   ))}
                   {packData.blocks.length === 0 && (
                     <div className="rpack-empty-list">
-                      <span>В ресурспаке нет измененных стандартных блоков</span>
+                      <span>В этом ресурспаке нет текстур блоков (пак изменяет только предметы или интерфейс)</span>
                     </div>
                   )}
                 </div>
@@ -514,7 +576,7 @@ export function ResourcePack3DViewer({
                   ))}
                   {packData.items.length === 0 && (
                     <div className="rpack-empty-list">
-                      <span>В ресурспаке нет измененных стандартных предметов</span>
+                      <span>В этом ресурспаке нет текстур предметов (пак изменяет только блоки или окружение)</span>
                     </div>
                   )}
                 </div>

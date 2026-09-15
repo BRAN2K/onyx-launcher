@@ -9466,6 +9466,12 @@ html[data-motion="reduced"] *::after {
   border-color: rgba(255, 255, 255, 0.12);
 }
 
+.rpack-tab-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .rpack-scroll-list {
   flex: 1;
   overflow-y: auto;
