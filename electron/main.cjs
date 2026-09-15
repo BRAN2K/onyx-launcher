@@ -2319,6 +2319,7 @@ function registerIpc() {
                 ? 1
                 : 2,
       });
+    }
     const facets = [[`project_type:${type}`]];
     if (/^[a-zA-Z0-9._+-]{1,32}$/.test(options.version || "")) {
       facets.push([`versions:${options.version}`]);
