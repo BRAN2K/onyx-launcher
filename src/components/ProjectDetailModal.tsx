@@ -24,6 +24,7 @@ import {
   Search,
   Server,
   Shield,
+  Sparkles,
   Star,
   Tag,
   Users,
@@ -31,6 +32,7 @@ import {
 } from "lucide-react";
 import { CurseForgeIcon, ModrinthIcon } from "./ProviderIcons";
 import { ResourcePack3DViewer } from "./ResourcePack3DViewer";
+import { Shader3DViewer } from "./Shader3DViewer";
 import { useI18n } from "../i18n";
 import type {
   CatalogProject,
@@ -38,6 +40,7 @@ import type {
   GameInstance,
   ProjectGalleryItem,
   ResourcePackInspectResult,
+  ShaderPackInspectResult,
 } from "../types";
 import { compactNumber, formatBytes } from "../utils";
 
@@ -305,6 +308,7 @@ export function ProjectDetailModal({
   });
 
   const [previewData, setPreviewData] = useState<ResourcePackInspectResult | null>(null);
+  const [shaderPreviewData, setShaderPreviewData] = useState<ShaderPackInspectResult | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
@@ -327,17 +331,21 @@ export function ProjectDetailModal({
     setVersionFilterLoader("");
     setVersionSearch("");
     setPreviewData(null);
+    setShaderPreviewData(null);
     setPreviewError(null);
   }, [project]);
 
-  // Cleanup temporary preview pack on unmount if not installed
+  // Cleanup temporary preview packs/shaders on unmount if not installed
   useEffect(() => {
     return () => {
       if (previewData?.tempFilePath) {
         window.onyx?.resourcepack?.cleanupPreview(previewData.tempFilePath).catch(() => {});
       }
+      if (shaderPreviewData?.tempFilePath) {
+        window.onyx?.shaderpack?.cleanupPreview(shaderPreviewData.tempFilePath).catch(() => {});
+      }
     };
-  }, [previewData]);
+  }, [previewData, shaderPreviewData]);
 
   const handleOpen3DPreview = useCallback(
     async (specificUrl?: string) => {
@@ -371,19 +379,26 @@ export function ProjectDetailModal({
         }
 
         if (!targetUrl) {
-          throw new Error("Не удалось найти прямую ссылку на скачивание ресурспака");
+          throw new Error("Не удалось найти прямую ссылку на скачивание файла");
         }
 
-        const inspectResult = await window.onyx.resourcepack.downloadAndInspect({
-          url: targetUrl,
-          projectId: String(project.project_id),
-        });
-
-        setPreviewData(inspectResult);
+        if (project.project_type === "shader") {
+          const inspectResult = await window.onyx.shaderpack.downloadAndInspect({
+            url: targetUrl,
+            projectId: String(project.project_id),
+          });
+          setShaderPreviewData(inspectResult);
+        } else {
+          const inspectResult = await window.onyx.resourcepack.downloadAndInspect({
+            url: targetUrl,
+            projectId: String(project.project_id),
+          });
+          setPreviewData(inspectResult);
+        }
       } catch (err: unknown) {
         const message =
           err instanceof Error ? err.message : "Ошибка загрузки 3D предпросмотра";
-        console.error("Failed to load resource pack preview:", err);
+        console.error("Failed to load 3D preview:", err);
         setPreviewError(message);
       } finally {
         setLoadingPreview(false);
@@ -798,20 +813,33 @@ export function ProjectDetailModal({
               </div>
 
               <div className="project-detail__hero-actions">
-                {project.project_type === "resourcepack" && (
+                {(project.project_type === "resourcepack" ||
+                  project.project_type === "shader") && (
                   <button
                     type="button"
                     className="button button--secondary project-detail__preview-btn"
                     onClick={() => void handleOpen3DPreview()}
                     disabled={loadingPreview}
-                    title="Интерактивный 3D-просмотр ресурспака в реальном времени"
+                    title={
+                      project.project_type === "shader"
+                        ? "Интерактивная 3D Шейдер-Студия с живым освещением и диорамой"
+                        : "Интерактивный 3D-просмотр ресурспака в реальном времени"
+                    }
                   >
                     {loadingPreview ? (
                       <LoaderCircle className="spin" size={16} />
+                    ) : project.project_type === "shader" ? (
+                      <Sparkles size={16} />
                     ) : (
                       <Box size={16} />
                     )}
-                    <span>{loadingPreview ? "Загрузка 3D..." : "3D Предпросмотр"}</span>
+                    <span>
+                      {loadingPreview
+                        ? "Загрузка 3D..."
+                        : project.project_type === "shader"
+                          ? "3D Шейдер-Студия"
+                          : "3D Предпросмотр"}
+                    </span>
                   </button>
                 )}
 
@@ -1246,21 +1274,27 @@ export function ProjectDetailModal({
                             </div>
 
                             <div className="version-card__actions">
-                              {project.project_type === "resourcepack" && version.downloadUrl && (
-                                <button
-                                  type="button"
-                                  className="button button--ghost button--sm version-card__preview-btn"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    void handleOpen3DPreview(version.downloadUrl!);
-                                  }}
-                                  disabled={loadingPreview}
-                                  title="3D просмотр этой версии"
-                                >
-                                  <Box size={14} />
-                                  <span>3D</span>
-                                </button>
-                              )}
+                              {(project.project_type === "resourcepack" ||
+                                project.project_type === "shader") &&
+                                version.downloadUrl && (
+                                  <button
+                                    type="button"
+                                    className="button button--ghost button--sm version-card__preview-btn"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      void handleOpen3DPreview(version.downloadUrl!);
+                                    }}
+                                    disabled={loadingPreview}
+                                    title="3D просмотр этой версии"
+                                  >
+                                    {project.project_type === "shader" ? (
+                                      <Sparkles size={14} />
+                                    ) : (
+                                      <Box size={14} />
+                                    )}
+                                    <span>3D</span>
+                                  </button>
+                                )}
 
                               <button
                                 className={`button button--sm version-card__install-btn ${
@@ -1349,6 +1383,14 @@ export function ProjectDetailModal({
           packData={previewData}
           instances={instances}
           onClose={() => setPreviewData(null)}
+        />
+      )}
+
+      {shaderPreviewData && (
+        <Shader3DViewer
+          packData={shaderPreviewData}
+          instances={instances}
+          onClose={() => setShaderPreviewData(null)}
         />
       )}
     </AnimatePresence>
