@@ -83,10 +83,27 @@ async function checkInstanceHealth({
   const checks = [];
   const instanceDirectory = path.join(instancesRoot, instance.id);
   const instanceStats = await fsp.stat(instanceDirectory).catch(() => null);
+  const targetLoaderVersion =
+    instance.loaderVersion || instance.installProfile?.loaderVersion;
   const requiresInstall =
     !instance.resolvedVersionId ||
+    (targetLoaderVersion &&
+      !instance.resolvedVersionId.includes(targetLoaderVersion)) ||
     ["setup", "pack-ready", "error"].includes(instance.status);
   let repairNeeded = false;
+  if (
+    targetLoaderVersion &&
+    instance.resolvedVersionId &&
+    !instance.resolvedVersionId.includes(targetLoaderVersion)
+  ) {
+    repairNeeded = true;
+    checks.push({
+      code: "loader-version-mismatch",
+      status: "warning",
+      action: "repair",
+      message: `Loader version mismatch: expected ${targetLoaderVersion}, got ${instance.resolvedVersionId}`,
+    });
+  }
 
   if (instanceStats?.isDirectory()) {
     try {

@@ -256,13 +256,23 @@ function mergeVersion(parent, child) {
 }
 
 function loaderInfo(instance) {
-  if (instance.installProfile) return instance.installProfile;
   const raw = String(instance.loader || "Vanilla").trim();
   const [name, ...versionParts] = raw.split(/\s+/);
+  const explicitVersion =
+    instance.loaderVersion ||
+    (instance.installProfile?.loaderVersion !== undefined
+      ? instance.installProfile.loaderVersion
+      : null) ||
+    versionParts.join(" ") ||
+    null;
+  if (instance.installProfile && !instance.loaderVersion) {
+    return instance.installProfile;
+  }
   return {
-    minecraftVersion: instance.version,
+    minecraftVersion:
+      instance.version || instance.installProfile?.minecraftVersion,
     loader: name.toLowerCase(),
-    loaderVersion: versionParts.join(" ") || null,
+    loaderVersion: explicitVersion,
   };
 }
 
@@ -752,17 +762,25 @@ class MinecraftService {
 
     const versionRoot = path.join(this.sharedRoot, "versions");
     const directories = await fsp.readdir(versionRoot, { withFileTypes: true });
-    const match = directories
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name)
-      .filter(
-        (name) =>
-          name.includes(profile.minecraftVersion) &&
-          name.toLowerCase().includes(loader) &&
-          (loader !== "forge" || !name.toLowerCase().includes("neoforge")),
-      )
-      .sort()
-      .at(-1);
+    const targetMatch = profile.loaderVersion
+      ? directories
+          .filter((entry) => entry.isDirectory())
+          .map((entry) => entry.name)
+          .find((name) => name.includes(profile.loaderVersion))
+      : null;
+    const match =
+      targetMatch ||
+      directories
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .filter(
+          (name) =>
+            name.includes(profile.minecraftVersion) &&
+            name.toLowerCase().includes(loader) &&
+            (loader !== "forge" || !name.toLowerCase().includes("neoforge")),
+        )
+        .sort()
+        .at(-1);
     if (!match) throw new Error(`The ${loader} profile did not appear after installation`);
     return match;
   }
