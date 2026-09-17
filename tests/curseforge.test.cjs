@@ -147,3 +147,40 @@ test("normalizeCurseForgeProject normalizes modpack data into CatalogProject sch
   assert.ok(normalized.categories.includes("neoforge"));
   assert.ok(normalized.versions.includes("1.21.1"));
 });
+
+test("downloadFile handles positional arguments seamlessly", async () => {
+  const { downloadFile } = require("../electron/services/network.cjs");
+  await assert.rejects(
+    async () => {
+      await downloadFile();
+    },
+    {
+      name: "TypeError",
+      message: /The "destination" path argument must be a non-empty string/,
+    },
+  );
+
+  await assert.rejects(
+    async () => {
+      await downloadFile("https://example.com/file.jar", undefined);
+    },
+    {
+      name: "TypeError",
+      message: /The "destination" path argument must be a non-empty string/,
+    },
+  );
+});
+
+test("installCurseForgeModpack validates missing instancesRoot", async () => {
+  const { installCurseForgeModpack } = require("../electron/services/curseforge.cjs");
+  await assert.rejects(
+    async () => {
+      await installCurseForgeModpack({ instancesRoot: null });
+    },
+    {
+      name: "Error",
+      message: /Invalid instances directory specified/,
+    },
+  );
+});
+

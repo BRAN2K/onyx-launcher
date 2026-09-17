@@ -806,7 +806,9 @@ async function installModToInstance(project, targetInstance, task, signal) {
     );
     await fsp.mkdir(modsDir, { recursive: true });
     const dest = path.join(modsDir, chosen.fileName);
-    await downloadFile(downloadUrl, dest, {
+    await downloadFile({
+      url: downloadUrl,
+      destination: dest,
       signal,
       onProgress: (p) => {
         taskUpdate(task, {
@@ -2487,9 +2489,13 @@ function registerIpc() {
                 subtitle: "Downloading CurseForge modpack",
               });
               const res = await curseforgeService.installCurseForgeModpack({
-                instancesRoot: state.settings.gameDirectory,
+                instancesRoot:
+                  state.settings.gameDirectory ||
+                  path.join(onyxRoot(), "instances"),
+                instanceId: task.instanceId,
                 modId: project.curseforgeId || project.project_id,
                 packName: project.title,
+                signal: controller.signal,
                 onProgress: (p) => {
                   taskUpdate(task, {
                     status:

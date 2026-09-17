@@ -139,16 +139,35 @@ async function fileMatches(filePath, expected = {}) {
   }
 }
 
-async function downloadFile({
-  url,
-  destination,
-  sha1,
-  sha256,
-  sha512,
-  size,
-  onProgress,
-  signal,
-}) {
+async function downloadFile(optionsOrUrl, maybeDestination, maybeOptions = {}) {
+  const options =
+    typeof optionsOrUrl === "string"
+      ? {
+          url: optionsOrUrl,
+          destination: maybeDestination,
+          ...(maybeOptions || {}),
+        }
+      : optionsOrUrl || {};
+
+  const {
+    url,
+    destination,
+    sha1,
+    sha256,
+    sha512,
+    size,
+    onProgress,
+    signal,
+  } = options;
+
+  if (!destination || typeof destination !== "string") {
+    throw new TypeError(
+      `The "destination" path argument must be a non-empty string. Received ${
+        destination === undefined ? "undefined" : typeof destination
+      }`,
+    );
+  }
+
   if (signal?.aborted) throw abortError();
   if (await fileMatches(destination, { sha1, sha256, sha512, size })) {
     onProgress?.({ received: Number(size) || 0, total: Number(size) || 0, cached: true });

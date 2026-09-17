@@ -323,7 +323,7 @@ async function installCurseForgeMod({
   await fsp.mkdir(modsDir, { recursive: true });
   const destination = path.join(modsDir, file.fileName);
 
-  await downloadFile(downloadUrl, destination);
+  await downloadFile({ url: downloadUrl, destination });
   return {
     destination,
     fileName: file.fileName,
@@ -333,17 +333,23 @@ async function installCurseForgeMod({
 
 async function installCurseForgeModpack({
   instancesRoot,
+  instanceId: preferredInstanceId,
   archivePath,
   fileUrl,
   fileId,
   modId,
   packName,
+  signal,
   onProgress,
 }) {
   let zipPath = archivePath;
   let tempZip = false;
 
   try {
+    if (!instancesRoot || typeof instancesRoot !== "string") {
+      throw new Error("Invalid instances directory specified");
+    }
+
     // 1. If no local archive, download the modpack zip
     if (!zipPath) {
       let downloadUrl = fileUrl;
@@ -368,7 +374,10 @@ async function installCurseForgeModpack({
       const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), "onyx-cf-"));
       zipPath = path.join(tempDir, "modpack.zip");
       tempZip = true;
-      await downloadFile(downloadUrl, zipPath, {
+      await downloadFile({
+        url: downloadUrl,
+        destination: zipPath,
+        signal,
         onProgress: (p) => {
           onProgress?.({
             stage: "downloading_pack",
@@ -396,7 +405,9 @@ async function installCurseForgeModpack({
       .replace(/[<>:"/\\|?*]/g, "_")
       .trim();
 
-    const instanceId = `cf-${manifest.name ? manifest.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") : "pack"}-${Date.now().toString(36)}`;
+    const instanceId =
+      preferredInstanceId ||
+      `cf-${manifest.name ? manifest.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") : "pack"}-${Date.now().toString(36)}`;
     const instanceDir = safeDestination(instancesRoot, instanceId);
     await fsp.mkdir(instanceDir, { recursive: true });
 
@@ -437,6 +448,7 @@ async function installCurseForgeModpack({
 
     await downloadMany(downloadItems, {
       concurrency: 10,
+      signal,
       onProgress: (p) => {
         const ratio = p.count > 0 ? p.completed / p.count : 0;
         onProgress?.({
