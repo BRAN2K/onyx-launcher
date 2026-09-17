@@ -35,6 +35,36 @@ interface ResourcePack3DViewerProps {
   onClose: () => void;
 }
 
+function disposeHierarchy(obj: THREE.Object3D | null) {
+  if (!obj) return;
+  obj.traverse((child) => {
+    if (child instanceof THREE.Mesh || child instanceof THREE.InstancedMesh) {
+      if (child.geometry) {
+        child.geometry.dispose();
+      }
+      if (child.material) {
+        if (Array.isArray(child.material)) {
+          child.material.forEach((mat) => {
+            if ("map" in mat && mat.map && typeof (mat.map as THREE.Texture).dispose === "function") {
+              (mat.map as THREE.Texture).dispose();
+            }
+            mat.dispose();
+          });
+        } else {
+          if (
+            "map" in child.material &&
+            child.material.map &&
+            typeof (child.material.map as THREE.Texture).dispose === "function"
+          ) {
+            (child.material.map as THREE.Texture).dispose();
+          }
+          child.material.dispose();
+        }
+      }
+    }
+  });
+}
+
 export function ResourcePack3DViewer({
   packData,
   instances = [],
@@ -73,6 +103,15 @@ export function ResourcePack3DViewer({
     instances[0]?.id || "",
   );
   const [installedSuccess, setInstalledSuccess] = useState(false);
+
+  // Active Tab and on-demand rendering refs
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
+
+  const renderCountRef = useRef(15);
+  const markNeedsRender = (frames = 5) => {
+    renderCountRef.current = Math.max(renderCountRef.current, frames);
+  };
 
   // Rotation & Drag state
   const isDraggingRef = useRef(false);
@@ -154,9 +193,14 @@ export function ResourcePack3DViewer({
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    const renderer = new THREE.WebGLRenderer({
+      alpha: true,
+      antialias: false,
+      powerPreference: "low-power",
+      precision: "mediump",
+    });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
@@ -190,19 +234,37 @@ export function ResourcePack3DViewer({
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
 
+      if (activeTabRef.current === "gui") {
+        return;
+      }
+
+      let shouldRender = renderCountRef.current > 0;
+      if (renderCountRef.current > 0) {
+        renderCountRef.current--;
+      }
+
       if (currentMeshRef.current) {
         if (autoRotateRef.current && !isDraggingRef.current) {
           currentMeshRef.current.rotation.y += 0.008;
+          shouldRender = true;
         } else if (!isDraggingRef.current) {
-          // Damping rotation velocity
-          currentMeshRef.current.rotation.y += rotationVelocityRef.current.y;
-          currentMeshRef.current.rotation.x += rotationVelocityRef.current.x;
-          rotationVelocityRef.current.x *= 0.92;
-          rotationVelocityRef.current.y *= 0.92;
+          const vx = rotationVelocityRef.current.x;
+          const vy = rotationVelocityRef.current.y;
+          if (Math.abs(vx) > 0.0001 || Math.abs(vy) > 0.0001) {
+            currentMeshRef.current.rotation.y += vy;
+            currentMeshRef.current.rotation.x += vx;
+            rotationVelocityRef.current.x *= 0.92;
+            rotationVelocityRef.current.y *= 0.92;
+            shouldRender = true;
+          }
+        } else {
+          shouldRender = true;
         }
       }
 
-      renderer.render(scene, camera);
+      if (shouldRender) {
+        renderer.render(scene, camera);
+      }
     };
 
     animate();
@@ -214,6 +276,7 @@ export function ResourcePack3DViewer({
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
+      markNeedsRender(4);
     };
 
     window.addEventListener("resize", handleResize);
@@ -221,6 +284,13 @@ export function ResourcePack3DViewer({
     return () => {
       cancelAnimationFrame(animationFrameId);
       window.removeEventListener("resize", handleResize);
+      if (currentMeshRef.current) {
+        scene.remove(currentMeshRef.current);
+        disposeHierarchy(currentMeshRef.current);
+        currentMeshRef.current = null;
+      }
+      shadowGeo.dispose();
+      shadowMat.dispose();
       renderer.dispose();
       if (renderer.domElement && container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
@@ -234,12 +304,15 @@ export function ResourcePack3DViewer({
     }
     if (activeTab === "gui" && currentMeshRef.current && sceneRef.current) {
       sceneRef.current.remove(currentMeshRef.current);
+      disposeHierarchy(currentMeshRef.current);
       currentMeshRef.current = null;
+    } else {
+      markNeedsRender(5);
     }
   }, [activeTab]);
 
   // Texture Loader helper with Minecraft NearestFilter and animation strip cropping
-  const loadPixelTexture = (dataUrl: string): THREE.Texture => {
+  const loadPixelTexture = (dataUrl: string, onTextureLoaded?: () => void): THREE.Texture => {
     const loader = new THREE.TextureLoader();
     const texture = loader.load(dataUrl, (loadedTex) => {
       const img = loadedTex.image;
@@ -250,9 +323,13 @@ export function ResourcePack3DViewer({
         loadedTex.offset.set(0, 1 - 1 / frames);
         loadedTex.needsUpdate = true;
       }
+      if (onTextureLoaded) {
+        onTextureLoaded();
+      }
     });
     texture.magFilter = THREE.NearestFilter;
     texture.minFilter = THREE.NearestFilter;
+    texture.generateMipmaps = false;
     texture.colorSpace = THREE.SRGBColorSpace;
     return texture;
   };
@@ -262,25 +339,23 @@ export function ResourcePack3DViewer({
     if (activeTab !== "blocks" || !sceneRef.current) return;
     const scene = sceneRef.current;
 
-    if (!currentBlock) {
-      if (currentMeshRef.current) {
-        scene.remove(currentMeshRef.current);
-        currentMeshRef.current = null;
-      }
-      return;
-    }
-
     if (currentMeshRef.current) {
       scene.remove(currentMeshRef.current);
+      disposeHierarchy(currentMeshRef.current);
+      currentMeshRef.current = null;
+      markNeedsRender(2);
     }
 
+    if (!currentBlock) return;
+
     const { textures, transparent } = currentBlock;
-    const texRight = loadPixelTexture(textures.right || textures.sides || textures.top);
-    const texLeft = loadPixelTexture(textures.left || textures.sides || textures.top);
-    const texTop = loadPixelTexture(textures.top);
-    const texBottom = loadPixelTexture(textures.bottom || textures.top);
-    const texFront = loadPixelTexture(textures.front || textures.sides || textures.top);
-    const texBack = loadPixelTexture(textures.back || textures.sides || textures.top);
+    const onTexLoad = () => markNeedsRender(4);
+    const texRight = loadPixelTexture(textures.right || textures.sides || textures.top, onTexLoad);
+    const texLeft = loadPixelTexture(textures.left || textures.sides || textures.top, onTexLoad);
+    const texTop = loadPixelTexture(textures.top, onTexLoad);
+    const texBottom = loadPixelTexture(textures.bottom || textures.top, onTexLoad);
+    const texFront = loadPixelTexture(textures.front || textures.sides || textures.top, onTexLoad);
+    const texBack = loadPixelTexture(textures.back || textures.sides || textures.top, onTexLoad);
 
     const makeMat = (map: THREE.Texture) =>
       new THREE.MeshStandardMaterial({
@@ -309,32 +384,30 @@ export function ResourcePack3DViewer({
 
     scene.add(mesh);
     currentMeshRef.current = mesh;
+    markNeedsRender(6);
   }, [activeTab, currentBlock]);
 
-  // Build 3D Extruded Voxel Item Mesh
+  // Build 3D Extruded Voxel Item Mesh using high-performance InstancedMesh
   useEffect(() => {
     if (activeTab !== "items" || !sceneRef.current) return;
     const scene = sceneRef.current;
 
-    if (!currentItem) {
-      if (currentMeshRef.current) {
-        scene.remove(currentMeshRef.current);
-        currentMeshRef.current = null;
-      }
-      return;
-    }
-
     if (currentMeshRef.current) {
       scene.remove(currentMeshRef.current);
+      disposeHierarchy(currentMeshRef.current);
+      currentMeshRef.current = null;
+      markNeedsRender(2);
     }
 
-    let isMounted = true;
+    if (!currentItem) return;
+
+    let isCurrent = true;
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.src = currentItem.texture;
 
     img.onload = () => {
-      if (!isMounted || !sceneRef.current) return;
+      if (!isCurrent || !sceneRef.current) return;
 
       const rawWidth = img.width || 16;
       let rawHeight = img.height || 16;
@@ -357,7 +430,7 @@ export function ResourcePack3DViewer({
       const canvas = document.createElement("canvas");
       canvas.width = targetW;
       canvas.height = targetH;
-      const ctx = canvas.getContext("2d");
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
       if (!ctx) return;
 
       ctx.imageSmoothingEnabled = false;
@@ -365,55 +438,66 @@ export function ResourcePack3DViewer({
       ctx.drawImage(img, 0, 0, rawWidth, rawHeight, 0, 0, targetW, targetH);
       const imgData = ctx.getImageData(0, 0, targetW, targetH).data;
 
-      const group = new THREE.Group();
+      // Count solid pixels
+      let solidCount = 0;
+      for (let i = 3; i < imgData.length; i += 4) {
+        if (imgData[i] > 25) {
+          solidCount++;
+        }
+      }
+
+      if (solidCount === 0) return;
+
       const pixelSize = 1.8 / Math.max(targetW, targetH);
       const thickness = pixelSize * 0.85;
       const boxGeo = new THREE.BoxGeometry(pixelSize, pixelSize, thickness);
+      const sharedMat = new THREE.MeshStandardMaterial({
+        roughness: 0.65,
+        metalness: 0.08,
+      });
 
-      const matCache = new Map<number, THREE.MeshStandardMaterial>();
+      const instancedMesh = new THREE.InstancedMesh(boxGeo, sharedMat, solidCount);
+      const dummy = new THREE.Object3D();
+      const tempColor = new THREE.Color();
 
+      let instanceIdx = 0;
       for (let y = 0; y < targetH; y++) {
         for (let x = 0; x < targetW; x++) {
           const idx = (y * targetW + x) * 4;
           const alpha = imgData[idx + 3];
           if (alpha > 25) {
-            const r = imgData[idx];
-            const g = imgData[idx + 1];
-            const b = imgData[idx + 2];
-            const colorHex = (r << 16) | (g << 8) | b;
-
-            let mat = matCache.get(colorHex);
-            if (!mat) {
-              mat = new THREE.MeshStandardMaterial({
-                color: new THREE.Color(r / 255, g / 255, b / 255),
-                roughness: 0.65,
-                metalness: 0.08,
-              });
-              matCache.set(colorHex, mat);
-            }
-
-            const pixelMesh = new THREE.Mesh(boxGeo, mat);
-            pixelMesh.position.set(
+            dummy.position.set(
               (x - targetW / 2 + 0.5) * pixelSize,
               (targetH / 2 - y - 0.5) * pixelSize,
               0,
             );
-            group.add(pixelMesh);
+            dummy.updateMatrix();
+            instancedMesh.setMatrixAt(instanceIdx, dummy.matrix);
+
+            tempColor.setRGB(imgData[idx] / 255, imgData[idx + 1] / 255, imgData[idx + 2] / 255);
+            instancedMesh.setColorAt(instanceIdx, tempColor);
+            instanceIdx++;
           }
         }
       }
 
-      // Tilt like in Minecraft hand
-      group.rotation.z = -Math.PI / 4;
-      group.rotation.x = 0.2;
-      group.position.set(0, 0, 0);
+      instancedMesh.instanceMatrix.needsUpdate = true;
+      if (instancedMesh.instanceColor) {
+        instancedMesh.instanceColor.needsUpdate = true;
+      }
 
-      sceneRef.current.add(group);
-      currentMeshRef.current = group;
+      // Tilt like in Minecraft hand
+      instancedMesh.rotation.z = -Math.PI / 4;
+      instancedMesh.rotation.x = 0.2;
+      instancedMesh.position.set(0, 0, 0);
+
+      sceneRef.current.add(instancedMesh);
+      currentMeshRef.current = instancedMesh;
+      markNeedsRender(6);
     };
 
     return () => {
-      isMounted = false;
+      isCurrent = false;
     };
   }, [activeTab, currentItem]);
 
@@ -421,6 +505,7 @@ export function ResourcePack3DViewer({
   const handleMouseDown = (e: React.MouseEvent) => {
     isDraggingRef.current = true;
     prevMousePosRef.current = { x: e.clientX, y: e.clientY };
+    markNeedsRender(4);
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -437,6 +522,7 @@ export function ResourcePack3DViewer({
     };
 
     prevMousePosRef.current = { x: e.clientX, y: e.clientY };
+    markNeedsRender(4);
   };
 
   const handleMouseUp = () => {
@@ -449,6 +535,7 @@ export function ResourcePack3DViewer({
       Math.max(cameraRef.current.position.z + e.deltaY * 0.003, 1.8),
       6.0,
     );
+    markNeedsRender(4);
   };
 
   const handleResetCamera = () => {
@@ -456,6 +543,7 @@ export function ResourcePack3DViewer({
     if (currentMeshRef.current) {
       currentMeshRef.current.rotation.set(0.35, 0.55, 0);
     }
+    markNeedsRender(4);
   };
 
   const handleCloseAndCleanup = async () => {
@@ -688,10 +776,13 @@ export function ResourcePack3DViewer({
                       className={`rpack-thumb-card ${
                         selectedBlockId === block.id ? "is-selected" : ""
                       }`}
-                      onClick={() => setSelectedBlockId(block.id)}
+                      onClick={() => {
+                        setSelectedBlockId(block.id);
+                        markNeedsRender(6);
+                      }}
                     >
                       <div className="rpack-thumb-img">
-                        <img src={block.textures.top} alt={block.name} />
+                        <img src={block.textures.top} alt={block.name} loading="lazy" decoding="async" />
                       </div>
                       <div className="rpack-thumb-info">
                         <span className="rpack-thumb-name">{block.name}</span>
@@ -718,10 +809,13 @@ export function ResourcePack3DViewer({
                       className={`rpack-thumb-card ${
                         selectedItemId === item.id ? "is-selected" : ""
                       }`}
-                      onClick={() => setSelectedItemId(item.id)}
+                      onClick={() => {
+                        setSelectedItemId(item.id);
+                        markNeedsRender(6);
+                      }}
                     >
                       <div className="rpack-thumb-img">
-                        <img src={item.texture} alt={item.name} />
+                        <img src={item.texture} alt={item.name} loading="lazy" decoding="async" />
                       </div>
                       <div className="rpack-thumb-info">
                         <span className="rpack-thumb-name">{item.name}</span>
@@ -751,7 +845,7 @@ export function ResourcePack3DViewer({
                       onClick={() => setSelectedGuiId(guiItem.id)}
                     >
                       <div className="rpack-thumb-img rpack-thumb-img--gui">
-                        <img src={guiItem.texture} alt={guiItem.name} />
+                        <img src={guiItem.texture} alt={guiItem.name} loading="lazy" decoding="async" />
                       </div>
                       <div className="rpack-thumb-info">
                         <span className="rpack-thumb-name">{guiItem.name}</span>

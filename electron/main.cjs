@@ -72,7 +72,6 @@ const {
   saveModProfile,
 } = require("./services/mod-profiles.cjs");
 const resourcepackService = require("./services/resourcepack.cjs");
-const shaderpackService = require("./services/shaderpack.cjs");
 const {
   createWorldSnapshot,
   listWorldSnapshots,
@@ -2132,30 +2131,6 @@ function registerIpc() {
     const instanceDir = path.join(instancesRoot, instance.id);
     const destFolder = path.join(instanceDir, "resourcepacks");
     return resourcepackService.installPreviewPack({
-      tempFilePath,
-      destinationFolder: destFolder,
-      filename,
-    });
-  });
-
-  ipcMain.handle("shaderpack:inspect", async (_event, filePath) => {
-    return shaderpackService.inspectShaderPack(filePath);
-  });
-
-  ipcMain.handle("shaderpack:download-and-inspect", async (_event, { url, projectId }) => {
-    return shaderpackService.downloadAndInspectShaderPack({ url, projectId });
-  });
-
-  ipcMain.handle("shaderpack:cleanup-preview", async (_event, tempFilePath) => {
-    return shaderpackService.cleanupShaderPreview(tempFilePath);
-  });
-
-  ipcMain.handle("shaderpack:install-preview", async (_event, { tempFilePath, instanceId, filename }) => {
-    const instance = state.instances.find((i) => i.id === instanceId);
-    if (!instance) throw new Error("Instance not found");
-    const instanceDir = path.join(instancesRoot, instance.id);
-    const destFolder = path.join(instanceDir, "shaderpacks");
-    return shaderpackService.installShaderPreview({
       tempFilePath,
       destinationFolder: destFolder,
       filename,

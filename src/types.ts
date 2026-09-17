@@ -753,31 +753,6 @@ export interface ResourcePackInspectResult {
   tempFilePath?: string;
 }
 
-export interface ShaderPackInspectResult {
-  name: string;
-  description?: string;
-  iconDataUrl?: string | null;
-  profiles: string[];
-  features: {
-    water: boolean;
-    shadows: boolean;
-    godrays: boolean;
-    bloom: boolean;
-    waving: boolean;
-    dof: boolean;
-    motionBlur: boolean;
-    caustics: boolean;
-  };
-  performanceTier: {
-    tier: "low" | "medium" | "high" | "rtx";
-    label: string;
-    fpsEstimate: string;
-    recommendation: string;
-  };
-  rawShaderCount: number;
-  tempFilePath?: string;
-}
-
 export interface OnyxBridge {
   window: {
     minimize(): Promise<void>;
@@ -1056,19 +1031,6 @@ export interface OnyxBridge {
       url: string;
       projectId?: string;
     }): Promise<ResourcePackInspectResult>;
-    cleanupPreview(tempFilePath: string): Promise<void>;
-    installPreview(options: {
-      tempFilePath: string;
-      instanceId: string;
-      filename?: string;
-    }): Promise<string>;
-  };
-  shaderpack: {
-    inspect(filePath: string): Promise<ShaderPackInspectResult>;
-    downloadAndInspect(options: {
-      url: string;
-      projectId?: string;
-    }): Promise<ShaderPackInspectResult>;
     cleanupPreview(tempFilePath: string): Promise<void>;
     installPreview(options: {
       tempFilePath: string;

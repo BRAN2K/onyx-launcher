@@ -481,9 +481,9 @@ function bufferToDataUrl(buf, mimeType = "image/png") {
   return `data:${mimeType};base64,${buf.toString("base64")}`;
 }
 
-const MAX_BLOCKS = 80;
-const MAX_ITEMS = 80;
-const MAX_GUI = 60;
+const MAX_BLOCKS = 50;
+const MAX_ITEMS = 50;
+const MAX_GUI = 35;
 
 const GUI_TRANSLATIONS = {
   // Classic GUI containers (both flat and container/ subpath)

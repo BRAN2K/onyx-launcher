@@ -183,15 +183,6 @@ contextBridge.exposeInMainWorld("onyx", {
     installPreview: (options) =>
       ipcRenderer.invoke("resourcepack:install-preview", options),
   },
-  shaderpack: {
-    inspect: (filePath) => ipcRenderer.invoke("shaderpack:inspect", filePath),
-    downloadAndInspect: (options) =>
-      ipcRenderer.invoke("shaderpack:download-and-inspect", options),
-    cleanupPreview: (tempFilePath) =>
-      ipcRenderer.invoke("shaderpack:cleanup-preview", tempFilePath),
-    installPreview: (options) =>
-      ipcRenderer.invoke("shaderpack:install-preview", options),
-  },
   onDownloadProgress: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("download:progress", listener);
