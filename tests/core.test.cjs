@@ -27,6 +27,8 @@ const {
 const {
   minecraftOsName,
   adoptiumOsName,
+  azulOsName,
+  azulArchitecture,
   javaExecutableNames,
   javaConsoleExecutable,
   defaultDataRoot,
@@ -1847,3 +1849,14 @@ test("Speed and ETA handle stall and zero bytes gracefully", () => {
   assert.equal(calculateEta(1000, 0, 0), null);
   assert.equal(calculateEta(1000, 0, -5), null);
 });
+
+test("Azul Zulu platform helpers map OS and architectures correctly", () => {
+  assert.equal(azulOsName("darwin"), "macos");
+  assert.equal(azulOsName("win32"), "windows");
+  assert.equal(azulOsName("linux"), "linux");
+
+  assert.equal(azulArchitecture("arm64"), "arm64");
+  assert.equal(azulArchitecture("ia32"), "x86");
+  assert.equal(azulArchitecture("x64"), "x64");
+});
+

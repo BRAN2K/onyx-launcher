@@ -7,6 +7,8 @@ const { extractArchive, findFile } = require("./archive.cjs");
 const {
   adoptiumOsName,
   adoptiumArchitecture,
+  azulOsName,
+  azulArchitecture,
   javaExecutableNames,
   isJavaExecutableName,
 } = require("./platform.cjs");
@@ -40,6 +42,55 @@ async function findSystemJava(platform = process.platform) {
     if (inspected) return inspected;
   }
   return null;
+}
+
+async function findAdoptiumPackage(requiredMajor, signal) {
+  try {
+    const architecture = adoptiumArchitecture();
+    const operatingSystem = adoptiumOsName();
+    const assets = await fetchJson(
+      `https://api.adoptium.net/v3/assets/latest/${requiredMajor}/hotspot?architecture=${architecture}&image_type=jre&os=${operatingSystem}&vendor=eclipse`,
+      { signal },
+    );
+    if (!Array.isArray(assets)) return null;
+    const selected = assets.find(
+      (asset) => asset.binary?.package?.link && asset.binary?.package?.name,
+    );
+    if (!selected) return null;
+    return {
+      name: selected.binary.package.name,
+      url: selected.binary.package.link,
+      sha256: selected.binary.package.checksum,
+      size: selected.binary.package.size,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function findAzulZuluPackage(requiredMajor, signal) {
+  try {
+    const os = azulOsName();
+    const arch = azulArchitecture();
+    const packages = await fetchJson(
+      `https://api.azul.com/metadata/v1/zulu/packages/?java_version=${requiredMajor}&os=${os}&arch=${arch}&page_size=5`,
+      { signal },
+    );
+    if (!Array.isArray(packages) || packages.length === 0) return null;
+    const selected =
+      packages.find((p) => p.name?.includes("-jre") && p.download_url) ||
+      packages.find((p) => p.download_url) ||
+      packages[0];
+    if (!selected?.download_url) return null;
+    return {
+      name: selected.name,
+      url: selected.download_url,
+      sha256: selected.sha256_hash || null,
+      size: selected.size || null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 class JavaService {
@@ -80,15 +131,10 @@ class JavaService {
       progress: 1,
       message: `Selecting Java ${requiredMajor}…`,
     });
-    const architecture = adoptiumArchitecture();
-    const operatingSystem = adoptiumOsName();
-    const assets = await fetchJson(
-      `https://api.adoptium.net/v3/assets/latest/${requiredMajor}/hotspot?architecture=${architecture}&image_type=jre&os=${operatingSystem}&vendor=eclipse`,
-      { signal },
-    );
-    const selected = assets.find(
-      (asset) => asset.binary?.package?.link && asset.binary?.package?.name,
-    );
+
+    const selected =
+      (await findAdoptiumPackage(requiredMajor, signal)) ||
+      (await findAzulZuluPackage(requiredMajor, signal));
     if (!selected) {
       throw new Error(`No prebuilt Java runtime was found for Java ${requiredMajor}`);
     }
@@ -100,13 +146,13 @@ class JavaService {
     const archive = path.join(
       this.runtimeRoot,
       "downloads",
-      selected.binary.package.name,
+      selected.name,
     );
     await downloadFile({
-      url: selected.binary.package.link,
+      url: selected.url,
       destination: archive,
-      sha256: selected.binary.package.checksum,
-      size: selected.binary.package.size,
+      sha256: selected.sha256,
+      size: selected.size,
       signal,
       onProgress: ({ received, total }) => {
         const progress = total ? Math.round((received / total) * 72) : 8;
@@ -143,6 +189,7 @@ class JavaService {
       5,
     );
     if (!executable) throw new Error("The Java archive does not contain an executable");
+    await fsp.chmod(executable, 0o755).catch(() => undefined);
     onProgress?.({
       stage: "java",
       progress: 100,

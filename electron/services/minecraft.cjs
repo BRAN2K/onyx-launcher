@@ -681,6 +681,18 @@ class MinecraftService {
         }),
     });
 
+    const launcherProfilesPath = path.join(this.sharedRoot, "launcher_profiles.json");
+    try {
+      await fsp.access(launcherProfilesPath);
+    } catch {
+      await fsp.mkdir(this.sharedRoot, { recursive: true });
+      await fsp.writeFile(
+        launcherProfilesPath,
+        JSON.stringify({ profiles: {} }, null, 2),
+        "utf8",
+      );
+    }
+
     await new Promise((resolve, reject) => {
       const executable = javaConsoleExecutable(javaPath);
       let aborted = false;

@@ -6,14 +6,15 @@ export function formatPlaytime(
   minutes: number,
   locale: FormattingLocale = "en",
 ) {
+  const safeMinutes = Math.max(0, Math.floor(Number(minutes) || 0));
   if (locale === "ru") {
-    if (minutes < 60) return `${minutes} мин`;
-    const hours = Math.floor(minutes / 60);
+    if (safeMinutes < 60) return `${safeMinutes} мин`;
+    const hours = Math.floor(safeMinutes / 60);
     if (hours < 24) return `${hours} ч`;
     return `${Math.floor(hours / 24)} д ${hours % 24} ч`;
   }
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.floor(minutes / 60);
+  if (safeMinutes < 60) return `${safeMinutes} min`;
+  const hours = Math.floor(safeMinutes / 60);
   if (hours < 24) return `${hours} h`;
   return `${Math.floor(hours / 24)} d ${hours % 24} h`;
 }

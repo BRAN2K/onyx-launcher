@@ -58,10 +58,24 @@ function defaultDataRoot({
   return path.join(home, ".local", "share", "onyx-launcher");
 }
 
+function azulOsName(platform = process.platform) {
+  if (platform === "win32") return "windows";
+  if (platform === "darwin") return "macos";
+  return "linux";
+}
+
+function azulArchitecture(architecture = process.arch) {
+  if (architecture === "arm64") return "arm64";
+  if (architecture === "ia32") return "x86";
+  return "x64";
+}
+
 module.exports = {
   minecraftOsName,
   adoptiumOsName,
   adoptiumArchitecture,
+  azulOsName,
+  azulArchitecture,
   minecraftArchitecture,
   nativeArchitectureToken,
   javaExecutableNames,
