@@ -12,7 +12,10 @@ function adoptiumOsName(platform = process.platform) {
   return "linux";
 }
 
-function adoptiumArchitecture(architecture = process.arch) {
+function adoptiumArchitecture(architecture = process.arch, majorVersion = 21) {
+  if (process.platform === "darwin" && Number(majorVersion) <= 8) {
+    return "x64";
+  }
   if (architecture === "arm64") return "aarch64";
   if (architecture === "ia32") return "x86";
   return "x64";
@@ -64,7 +67,10 @@ function azulOsName(platform = process.platform) {
   return "linux";
 }
 
-function azulArchitecture(architecture = process.arch) {
+function azulArchitecture(architecture = process.arch, majorVersion = 21) {
+  if (process.platform === "darwin" && Number(majorVersion) <= 8) {
+    return "x64";
+  }
   if (architecture === "arm64") return "arm64";
   if (architecture === "ia32") return "x86";
   return "x64";

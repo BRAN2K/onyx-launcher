@@ -46,7 +46,7 @@ async function findSystemJava(platform = process.platform) {
 
 async function findAdoptiumPackage(requiredMajor, signal) {
   try {
-    const architecture = adoptiumArchitecture();
+    const architecture = adoptiumArchitecture(process.arch, requiredMajor);
     const operatingSystem = adoptiumOsName();
     const assets = await fetchJson(
       `https://api.adoptium.net/v3/assets/latest/${requiredMajor}/hotspot?architecture=${architecture}&image_type=jre&os=${operatingSystem}&vendor=eclipse`,
@@ -71,7 +71,7 @@ async function findAdoptiumPackage(requiredMajor, signal) {
 async function findAzulZuluPackage(requiredMajor, signal) {
   try {
     const os = azulOsName();
-    const arch = azulArchitecture();
+    const arch = azulArchitecture(process.arch, requiredMajor);
     const packages = await fetchJson(
       `https://api.azul.com/metadata/v1/zulu/packages/?java_version=${requiredMajor}&os=${os}&arch=${arch}&page_size=5`,
       { signal },

@@ -27,6 +27,7 @@ const {
 const {
   minecraftOsName,
   adoptiumOsName,
+  adoptiumArchitecture,
   azulOsName,
   azulArchitecture,
   javaExecutableNames,
@@ -1850,13 +1851,17 @@ test("Speed and ETA handle stall and zero bytes gracefully", () => {
   assert.equal(calculateEta(1000, 0, -5), null);
 });
 
-test("Azul Zulu platform helpers map OS and architectures correctly", () => {
+test("Azul Zulu and Adoptium platform helpers map OS and architectures correctly", () => {
   assert.equal(azulOsName("darwin"), "macos");
   assert.equal(azulOsName("win32"), "windows");
   assert.equal(azulOsName("linux"), "linux");
 
-  assert.equal(azulArchitecture("arm64"), "arm64");
-  assert.equal(azulArchitecture("ia32"), "x86");
-  assert.equal(azulArchitecture("x64"), "x64");
+  assert.equal(azulArchitecture("arm64", 21), "arm64");
+  assert.equal(azulArchitecture("ia32", 21), "x86");
+  assert.equal(azulArchitecture("x64", 21), "x64");
+  if (process.platform === "darwin") {
+    assert.equal(azulArchitecture("arm64", 8), "x64");
+    assert.equal(adoptiumArchitecture("arm64", 8), "x64");
+  }
 });
 

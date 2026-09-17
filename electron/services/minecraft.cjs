@@ -225,25 +225,34 @@ function mergeVersion(parent, child) {
   const parentFiltered = (parent.libraries || []).filter(
     (lib) => !childKeys.has(libraryKey(lib)),
   );
-  return {
+  const jvmArgs = [
+    ...(parent.arguments?.jvm || []),
+    ...(child.arguments?.jvm || []),
+  ];
+  const gameArgs = [
+    ...(parent.arguments?.game || []),
+    ...(child.arguments?.game || []),
+  ];
+  const merged = {
     ...parent,
     ...child,
     id: child.id,
     jar: child.jar || parent.jar || parent.id,
     libraries: [...(child.libraries || []), ...parentFiltered],
-    arguments: {
-      jvm: [
-        ...(parent.arguments?.jvm || []),
-        ...(child.arguments?.jvm || []),
-      ],
-      game: [
-        ...(parent.arguments?.game || []),
-        ...(child.arguments?.game || []),
-      ],
-    },
     minecraftArguments:
       child.minecraftArguments || parent.minecraftArguments || "",
   };
+  if (jvmArgs.length > 0 || gameArgs.length > 0) {
+    merged.arguments = {
+      ...(parent.arguments || {}),
+      ...(child.arguments || {}),
+      ...(jvmArgs.length > 0 ? { jvm: jvmArgs } : {}),
+      ...(gameArgs.length > 0 ? { game: gameArgs } : {}),
+    };
+  } else {
+    delete merged.arguments;
+  }
+  return merged;
 }
 
 function loaderInfo(instance) {
@@ -990,7 +999,7 @@ class MinecraftService {
     }
 
     let gameArguments;
-    if (version.arguments?.game) {
+    if (version.arguments?.game?.length) {
       gameArguments = expandArguments(version.arguments.game, features).map(
         (argument) => replaceVariables(argument, variables),
       );
