@@ -52,6 +52,7 @@ import {
   Wifi,
   X,
 } from "lucide-react";
+import { useSearchFocus } from "../hooks/useSearchFocus";
 import { useI18n } from "../i18n";
 import type {
   ContentHistoryEntry,
@@ -210,6 +211,8 @@ export function InstancePage({
   const [selectedPerformanceSessionId, setSelectedPerformanceSessionId] =
     useState<string | null>(null);
   const contentRequestRef = useRef(0);
+  const contentSearchRef = useRef<HTMLInputElement>(null);
+  useSearchFocus(contentSearchRef);
 
   const [screenshots, setScreenshots] = useState<InstanceScreenshot[]>([]);
   const [loadingScreenshots, setLoadingScreenshots] = useState(false);
@@ -1902,6 +1905,7 @@ export function InstancePage({
             <label className="input-shell input-shell--search">
               <Search size={15} />
               <input
+                ref={contentSearchRef}
                 value={contentQuery}
                 placeholder={t("instancePage.content.search")}
                 onChange={(event) => setContentQuery(event.target.value)}
