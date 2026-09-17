@@ -174,11 +174,49 @@ jobs:
             release/SHA256SUMS-windows.txt
           if-no-files-found: error
 
+  macos:
+    needs: prepare
+    runs-on: macos-14
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build macOS artifacts
+        run: npm run dist:mac
+
+      - name: Create macOS checksums
+        working-directory: release
+        run: shasum -a 256 *.dmg *.zip > SHA256SUMS-macos.txt
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: onyx-launcher-macos
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/SHA256SUMS-macos.txt
+          if-no-files-found: error
+
   publish:
     needs:
       - prepare
       - linux
       - windows
+      - macos
     runs-on: ubuntu-24.04
     timeout-minutes: 10
 
@@ -194,4 +232,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.prepare.outputs.tag }}
           VERSION: ${{ needs.prepare.outputs.version }}
-        run: gh release create "$TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes --title "Onyx Launcher ${VERSION}"
+        run: |
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes --title "Onyx Launcher ${VERSION}"
+          for file in release-assets/*; do
+            echo "Uploading asset: $file"
+            gh release upload "$TAG" "$file" --repo "$GITHUB_REPOSITORY" --clobber
+          done
