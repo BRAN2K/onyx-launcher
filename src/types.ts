@@ -49,6 +49,19 @@ export interface LauncherSettings {
   fullscreen: boolean;
   telemetry?: boolean;
   anonymousClientId?: string;
+  discordRpc?: boolean;
+  discordRpcShowGame?: boolean;
+  discordRpcShowTime?: boolean;
+  discordRpcShowServer?: boolean;
+  discordRpcShowWorld?: boolean;
+  discordRpcHideServerIp?: boolean;
+}
+
+export interface DiscordRpcStatus {
+  connected: boolean;
+  connecting: boolean;
+  enabled: boolean;
+  user: string | null;
 }
 
 export interface GameInstance {
@@ -1037,6 +1050,11 @@ export interface OnyxBridge {
       instanceId: string;
       filename?: string;
     }): Promise<string>;
+  };
+  rpc: {
+    getStatus(): Promise<DiscordRpcStatus>;
+    setPage(page: string): Promise<boolean>;
+    onStatusChange(callback: (status: DiscordRpcStatus) => void): () => void;
   };
   onDownloadProgress(
     callback: (progress: DownloadProgress) => void,

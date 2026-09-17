@@ -7,14 +7,17 @@ import {
   Box,
   Check,
   ChevronRight,
+  Clock,
   Coffee,
   Cpu,
   Database,
   Download,
   ExternalLink,
+  EyeOff,
   FileJson,
   FolderOpen,
   Gauge,
+  Globe,
   HardDrive,
   HeartPulse,
   Info,
@@ -23,6 +26,7 @@ import {
   LoaderCircle,
   Palette,
   RefreshCw,
+  Server,
   ShieldCheck,
   SlidersHorizontal,
   Trash2,
@@ -31,6 +35,7 @@ import {
 } from "lucide-react";
 import type {
   Accent,
+  DiscordRpcStatus,
   LauncherSettings,
   Locale,
   Profile,
@@ -89,6 +94,26 @@ export function SettingsPage({
   const [updateProgress, setUpdateProgress] = useState<UpdateProgress | null>(null);
   const [updateReady, setUpdateReady] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const [rpcStatus, setRpcStatus] = useState<DiscordRpcStatus | null>(null);
+
+  useEffect(() => {
+    let unmounted = false;
+    window.onyx?.rpc
+      ?.getStatus?.()
+      .then((status) => {
+        if (!unmounted && status) setRpcStatus(status);
+      })
+      .catch(() => {});
+
+    const unsubscribe = window.onyx?.rpc?.onStatusChange?.((status) => {
+      if (!unmounted && status) setRpcStatus(status);
+    });
+
+    return () => {
+      unmounted = true;
+      if (typeof unsubscribe === "function") unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     if (!window.onyx?.updater?.onProgress) return;
@@ -527,6 +552,114 @@ export function SettingsPage({
                   checked={settings.telemetry !== false}
                   onChange={(value) => void update({ telemetry: value })}
                 />
+              </SettingsGroup>
+
+              <SettingsGroup title={t("settings.discordRpc")}>
+                <div className="setting-row">
+                  <span className="setting-row__icon">
+                    <DiscordIcon size={17} />
+                  </span>
+                  <div>
+                    <strong>{t("settings.discordRpc")}</strong>
+                    <p>{t("settings.discordRpcHint")}</p>
+                    <div
+                      style={{
+                        marginTop: 6,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "inline-block",
+                          width: 8,
+                          height: 8,
+                          borderRadius: "50%",
+                          background:
+                            settings.discordRpc === false
+                              ? "var(--muted, #666)"
+                              : rpcStatus?.connected
+                                ? "#22c55e"
+                                : "#eab308",
+                        }}
+                      />
+                      <small style={{ color: "var(--muted, #888)" }}>
+                        {settings.discordRpc === false
+                          ? t("settings.discordRpcStatusDisabled")
+                          : rpcStatus?.connected
+                            ? t("settings.discordRpcStatusConnected", {
+                                user: rpcStatus.user || "User",
+                              })
+                            : rpcStatus?.connecting
+                              ? t("settings.discordRpcStatusConnecting")
+                              : t("settings.discordRpcStatusDisconnected")}
+                      </small>
+                    </div>
+                  </div>
+                  <button
+                    role="switch"
+                    aria-checked={settings.discordRpc !== false}
+                    className={`toggle ${settings.discordRpc !== false ? "is-on" : ""}`}
+                    onClick={() =>
+                      void update({ discordRpc: settings.discordRpc === false })
+                    }
+                  >
+                    <i />
+                  </button>
+                </div>
+
+                {settings.discordRpc !== false && (
+                  <>
+                    <ToggleRow
+                      icon={Box}
+                      title={t("settings.discordRpcShowGame")}
+                      description={t("settings.discordRpcShowGameHint")}
+                      checked={settings.discordRpcShowGame !== false}
+                      onChange={(value) =>
+                        void update({ discordRpcShowGame: value })
+                      }
+                    />
+                    <ToggleRow
+                      icon={Clock}
+                      title={t("settings.discordRpcShowTime")}
+                      description={t("settings.discordRpcShowTimeHint")}
+                      checked={settings.discordRpcShowTime !== false}
+                      onChange={(value) =>
+                        void update({ discordRpcShowTime: value })
+                      }
+                    />
+                    <ToggleRow
+                      icon={Server}
+                      title={t("settings.discordRpcShowServer")}
+                      description={t("settings.discordRpcShowServerHint")}
+                      checked={settings.discordRpcShowServer !== false}
+                      onChange={(value) =>
+                        void update({ discordRpcShowServer: value })
+                      }
+                    />
+                    <ToggleRow
+                      icon={Globe}
+                      title={t("settings.discordRpcShowWorld")}
+                      description={t("settings.discordRpcShowWorldHint")}
+                      checked={settings.discordRpcShowWorld !== false}
+                      onChange={(value) =>
+                        void update({ discordRpcShowWorld: value })
+                      }
+                    />
+                    {settings.discordRpcShowServer !== false && (
+                      <ToggleRow
+                        icon={EyeOff}
+                        title={t("settings.discordRpcHideServerIp")}
+                        description={t("settings.discordRpcHideServerIpHint")}
+                        checked={settings.discordRpcHideServerIp === true}
+                        onChange={(value) =>
+                          void update({ discordRpcHideServerIp: value })
+                        }
+                      />
+                    )}
+                  </>
+                )}
               </SettingsGroup>
 
               <SettingsGroup title={t("settings.community")}>

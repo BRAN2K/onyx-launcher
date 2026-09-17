@@ -127,6 +127,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    window.onyx?.rpc?.setPage?.(route).catch(() => {});
+  }, [route]);
+
+  useEffect(() => {
     void refreshState()
       .then((loaded) => {
         setOnboardingOpen(!loaded.settings.onboardingComplete);

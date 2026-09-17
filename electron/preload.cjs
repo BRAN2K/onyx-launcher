@@ -183,6 +183,15 @@ contextBridge.exposeInMainWorld("onyx", {
     installPreview: (options) =>
       ipcRenderer.invoke("resourcepack:install-preview", options),
   },
+  rpc: {
+    getStatus: () => ipcRenderer.invoke("rpc:status"),
+    setPage: (page) => ipcRenderer.invoke("rpc:page", page),
+    onStatusChange: (callback) => {
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on("rpc:status-changed", listener);
+      return () => ipcRenderer.removeListener("rpc:status-changed", listener);
+    },
+  },
   onDownloadProgress: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("download:progress", listener);

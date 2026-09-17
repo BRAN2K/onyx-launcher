@@ -108,6 +108,7 @@ const {
 } = require("./services/migration.cjs");
 const curseforgeService = require("./services/curseforge.cjs");
 const { UpdaterService } = require("./services/updater.cjs");
+const { DiscordRpcService } = require("./services/discord-rpc.cjs");
 
 if (process.env.ONYX_USER_DATA) {
   app.setPath("userData", path.resolve(process.env.ONYX_USER_DATA));
@@ -149,6 +150,12 @@ const DEFAULT_STATE = {
     fullscreen: false,
     telemetry: true,
     anonymousClientId: "",
+    discordRpc: true,
+    discordRpcShowGame: true,
+    discordRpcShowTime: true,
+    discordRpcShowServer: true,
+    discordRpcShowWorld: true,
+    discordRpcHideServerIp: false,
   },
   instances: [
     {
@@ -178,6 +185,10 @@ let authService;
 let javaService;
 const updaterService = new UpdaterService({ currentVersion: ONYX_VERSION });
 const telemetryService = new TelemetryService();
+const discordRpcService = new DiscordRpcService({
+  clientId: "1548737210139025568",
+  version: ONYX_VERSION,
+});
 const runningGames = new Map();
 const installLocks = new Map();
 const installControllers = new Map();
@@ -283,6 +294,12 @@ function sanitizeSettingsPatch(input = {}) {
     "onboardingComplete",
     "fullscreen",
     "telemetry",
+    "discordRpc",
+    "discordRpcShowGame",
+    "discordRpcShowTime",
+    "discordRpcShowServer",
+    "discordRpcShowWorld",
+    "discordRpcHideServerIp",
   ];
   for (const key of booleans) {
     if (typeof input[key] === "boolean") output[key] = input[key];
@@ -1107,12 +1124,31 @@ function registerIpc() {
         "Change the instances directory using safe data migration",
       );
     }
+    const previousRpc = state.settings.discordRpc !== false;
     state.settings = {
       ...state.settings,
       ...sanitizeSettingsPatch(settings),
     };
+    const currentRpc = state.settings.discordRpc !== false;
+    if (previousRpc && !currentRpc) {
+      discordRpcService.disable();
+    } else if (!previousRpc && currentRpc) {
+      discordRpcService.enable();
+      discordRpcService.refreshPresence(state.settings);
+    } else if (currentRpc) {
+      discordRpcService.refreshPresence(state.settings);
+    }
     await saveState();
     return structuredClone(state.settings);
+  });
+  ipcMain.handle("rpc:status", () => discordRpcService.getStatus());
+  ipcMain.handle("rpc:page", (_event, page) => {
+    if (discordRpcService.enabled && runningGames.size === 0) {
+      discordRpcService.setIdle(page, {
+        showTime: state.settings.discordRpcShowTime !== false,
+      });
+    }
+    return true;
   });
   ipcMain.handle("state:move-game-directory", async (_event, targetPath) => {
     if (runningGames.size || installControllers.size) {
@@ -2792,10 +2828,33 @@ function registerIpc() {
         },
         onLog: (payload) => {
           recorder.ingestLog(payload.text);
+          discordRpcService.ingestGameLog(instanceId, payload.text, state.settings);
           send("launcher:log", { instanceId, ...payload });
         },
         onExit: async ({ code, logPath }) => {
           runningGames.delete(instanceId);
+          discordRpcService.instanceGameStates.delete(instanceId);
+          if (state.settings.discordRpc !== false) {
+            if (runningGames.size > 0) {
+              const remainingId = runningGames.keys().next().value;
+              const remainingInstance = state.instances.find(
+                (i) => i.id === remainingId,
+              );
+              if (remainingInstance) {
+                discordRpcService.setPlaying(remainingInstance, {
+                  showGame: state.settings.discordRpcShowGame !== false,
+                  showTime: state.settings.discordRpcShowTime !== false,
+                  showServer: state.settings.discordRpcShowServer !== false,
+                  showWorld: state.settings.discordRpcShowWorld !== false,
+                  hideServerIp: state.settings.discordRpcHideServerIp === true,
+                });
+              }
+            } else {
+              discordRpcService.setIdle(discordRpcService.currentPage || "library", {
+                showTime: state.settings.discordRpcShowTime !== false,
+              });
+            }
+          }
           const endedAt = Date.now();
           const [performance, fps] = await Promise.all([
             recorder.stop({
@@ -2915,6 +2974,17 @@ function registerIpc() {
         },
       });
       runningGames.set(instanceId, launch);
+      if (state.settings.discordRpc !== false) {
+        discordRpcService.setPlaying(instance, {
+          showGame: state.settings.discordRpcShowGame !== false,
+          showTime: state.settings.discordRpcShowTime !== false,
+          showServer: state.settings.discordRpcShowServer !== false,
+          showWorld: state.settings.discordRpcShowWorld !== false,
+          hideServerIp: state.settings.discordRpcHideServerIp === true,
+          isNewLaunch: true,
+          startTime: Math.floor(Date.now() / 1000),
+        });
+      }
       instanceUpdate(instance, {
         status: "running",
         lastPlayed: "Just now",
@@ -3118,6 +3188,20 @@ if (!gotLock) {
       isPackaged: app.isPackaged,
     });
 
+    discordRpcService.on("connected", () => {
+      send("rpc:status-changed", discordRpcService.getStatus());
+    });
+    discordRpcService.on("disconnected", () => {
+      send("rpc:status-changed", discordRpcService.getStatus());
+    });
+
+    if (state.settings.discordRpc !== false) {
+      discordRpcService.enable();
+      discordRpcService.setIdle("library", {
+        showTime: state.settings.discordRpcShowTime !== false,
+      });
+    }
+
     app.on("activate", async () => {
       if (BrowserWindow.getAllWindows().length === 0) {
         await restoreLauncherWindow();
@@ -3132,6 +3216,7 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   ghostModeActive = false;
+  discordRpcService.disconnect();
   const reason = { preservePartial: true };
   for (const controller of installControllers.values()) {
     controller.abort(reason);
