@@ -4,28 +4,19 @@ import {
   Box,
   Check,
   Download,
-  Flame,
   Layers,
   LoaderCircle,
-  Maximize2,
-  Minimize2,
   Pause,
   Play,
   RotateCcw,
   Search,
-  Shield,
-  Sparkles,
   Swords,
   Trash2,
-  Wrench,
   X,
 } from "lucide-react";
 import type {
   GameInstance,
-  ResourcePackBlockPreview,
-  ResourcePackGuiPreview,
   ResourcePackInspectResult,
-  ResourcePackItemPreview,
 } from "../types";
 
 interface ResourcePack3DViewerProps {
@@ -106,7 +97,9 @@ export function ResourcePack3DViewer({
 
   // Active Tab and on-demand rendering refs
   const activeTabRef = useRef(activeTab);
-  activeTabRef.current = activeTab;
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
 
   const renderCountRef = useRef(15);
   const markNeedsRender = (frames = 5) => {
@@ -118,7 +111,9 @@ export function ResourcePack3DViewer({
   const prevMousePosRef = useRef({ x: 0, y: 0 });
   const rotationVelocityRef = useRef({ x: 0, y: 0.006 });
   const autoRotateRef = useRef(autoRotate);
-  autoRotateRef.current = autoRotate;
+  useEffect(() => {
+    autoRotateRef.current = autoRotate;
+  }, [autoRotate]);
 
   const searchQueryLower = searchQuery.trim().toLowerCase();
 
@@ -550,7 +545,9 @@ export function ResourcePack3DViewer({
     if (packData.tempFilePath) {
       try {
         await window.onyx.resourcepack.cleanupPreview(packData.tempFilePath);
-      } catch {}
+      } catch {
+        // Ignored
+      }
     }
     onClose();
   };

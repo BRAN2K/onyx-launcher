@@ -24,7 +24,6 @@ import {
   Search,
   Server,
   Shield,
-  Sparkles,
   Star,
   Tag,
   Users,
@@ -307,7 +306,6 @@ export function ProjectDetailModal({
 
   const [previewData, setPreviewData] = useState<ResourcePackInspectResult | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
 
   // Close on Escape key
   useEffect(() => {
@@ -328,7 +326,6 @@ export function ProjectDetailModal({
     setVersionFilterLoader("");
     setVersionSearch("");
     setPreviewData(null);
-    setPreviewError(null);
   }, [project]);
 
   // Cleanup temporary preview packs on unmount if not installed
@@ -344,7 +341,6 @@ export function ProjectDetailModal({
     async (specificUrl?: string) => {
       if (!project) return;
       setLoadingPreview(true);
-      setPreviewError(null);
       try {
         let targetUrl = specificUrl || null;
         if (!targetUrl) {
@@ -381,10 +377,7 @@ export function ProjectDetailModal({
         });
         setPreviewData(inspectResult);
       } catch (err: unknown) {
-        const message =
-          err instanceof Error ? err.message : "Ошибка загрузки 3D предпросмотра";
         console.error("Failed to load 3D preview:", err);
-        setPreviewError(message);
       } finally {
         setLoadingPreview(false);
       }
