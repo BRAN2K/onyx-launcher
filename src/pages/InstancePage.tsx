@@ -115,7 +115,7 @@ interface InstancePageProps {
   onBackup: (instance: GameInstance) => void;
   onUpdatePack: (instance: GameInstance) => void;
   onExportSync: (instance: GameInstance) => void;
-  onDiscover: () => void;
+  onDiscover: (instance?: GameInstance) => void;
   onUpdate: (
     instance: GameInstance,
     patch: { settings: GameInstance["settings"] },
@@ -1873,7 +1873,7 @@ export function InstancePage({
               </button>
               <button
                 className="button button--mini button--accent"
-                onClick={onDiscover}
+                onClick={() => onDiscover(instance)}
               >
                 <Plus size={14} />
                 {t("instancePage.content.add")}

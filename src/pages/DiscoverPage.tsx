@@ -31,10 +31,13 @@ import { compactNumber } from "../utils";
 
 interface DiscoverPageProps {
   downloads: DownloadTask[];
-  onInstall: (project: CatalogProject) => void;
+  onInstall: (project: CatalogProject, targetInstanceId?: string) => void;
   onNavigate: (route: RouteId) => void;
   versions: MinecraftVersion[];
   instances?: GameInstance[];
+  targetInstanceId?: string | null;
+  onSelectTargetInstance?: (id: string | null) => void;
+  onBackToInstance?: () => void;
 }
 
 type ProjectType = "modpack" | "mod" | "resourcepack" | "shader";
@@ -45,6 +48,9 @@ export function DiscoverPage({
   onNavigate,
   versions,
   instances = [],
+  targetInstanceId = null,
+  onSelectTargetInstance,
+  onBackToInstance,
 }: DiscoverPageProps) {
   const { locale, t } = useI18n();
   const [selectedProject, setSelectedProject] = useState<CatalogProject | null>(null);
@@ -61,8 +67,50 @@ export function DiscoverPage({
   >("downloads");
   const [total, setTotal] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [installedModNames, setInstalledModNames] = useState<Set<string>>(new Set());
   const searchRef = useRef<HTMLInputElement>(null);
   useSearchFocus(searchRef);
+
+  const targetInstance = useMemo(
+    () => (targetInstanceId ? instances.find((item) => item.id === targetInstanceId) || null : null),
+    [instances, targetInstanceId],
+  );
+
+  useEffect(() => {
+    if (targetInstance) {
+      if (targetInstance.version) {
+        setGameVersion(targetInstance.version);
+      }
+      if (targetInstance.loader && targetInstance.loader !== "vanilla") {
+        setLoader(targetInstance.loader.toLowerCase());
+      }
+      setProjectType((curr) => (curr === "modpack" ? "mod" : curr));
+    }
+  }, [targetInstance]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!targetInstanceId) {
+      setInstalledModNames(new Set());
+      return;
+    }
+    window.onyx?.state?.listContent?.(targetInstanceId, "mods")
+      .then((items) => {
+        if (cancelled || !Array.isArray(items)) return;
+        const set = new Set<string>();
+        for (const item of items) {
+          if (item.projectId) set.add(item.projectId.toLowerCase());
+          if (item.name) set.add(item.name.toLowerCase());
+        }
+        setInstalledModNames(set);
+      })
+      .catch(() => {
+        if (!cancelled) setInstalledModNames(new Set());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [targetInstanceId, downloads]);
 
   useEffect(() => {
     let cancelled = false;
@@ -139,7 +187,26 @@ export function DiscoverPage({
   };
 
   const installState = (projectId: string) =>
-    downloads.find((download) => download.projectId === projectId);
+    downloads.find((download) => {
+      if (download.projectId !== projectId) return false;
+      if (!targetInstanceId) return true;
+      return download.targetInstanceId === targetInstanceId || !download.targetInstanceId;
+    });
+
+  const isProjectInstalled = (project: CatalogProject) => {
+    const task = installState(project.project_id);
+    if (task?.status === "done") return true;
+
+    if (targetInstanceId && installedModNames.size > 0) {
+      if (installedModNames.has(project.project_id.toLowerCase())) return true;
+      if (project.slug && installedModNames.has(project.slug.toLowerCase())) return true;
+      const slugLower = (project.slug || project.project_id).toLowerCase();
+      for (const name of installedModNames) {
+        if (name.includes(slugLower)) return true;
+      }
+    }
+    return false;
+  };
 
   return (
     <motion.div
@@ -177,6 +244,65 @@ export function DiscoverPage({
           </button>
         </div>
       </div>
+
+      {instances.length > 0 && (
+        <div className="target-instance-bar">
+          <div className="target-instance-bar__left">
+            <span className="target-instance-bar__label">
+              <PackagePlus size={14} />
+              {t("discover.targetInstance")}:
+            </span>
+            <div className="target-instance-bar__select-wrap">
+              <select
+                value={targetInstanceId || ""}
+                onChange={(event) => {
+                  const val = event.target.value;
+                  onSelectTargetInstance?.(val || null);
+                }}
+                className="target-instance-bar__select"
+              >
+                <option value="">{t("discover.targetAny")}</option>
+                {instances.map((inst) => (
+                  <option key={inst.id} value={inst.id}>
+                    {inst.name} ({inst.version}
+                    {inst.loader && inst.loader !== "vanilla"
+                      ? ` · ${inst.loader}`
+                      : ""}
+                    )
+                  </option>
+                ))}
+              </select>
+            </div>
+            {targetInstance && (
+              <span className="target-instance-bar__badge">
+                {targetInstance.version}
+                {targetInstance.loader && targetInstance.loader !== "vanilla"
+                  ? ` · ${targetInstance.loader}`
+                  : ""}
+              </span>
+            )}
+            {targetInstanceId && (
+              <button
+                type="button"
+                className="target-instance-bar__clear"
+                onClick={() => onSelectTargetInstance?.(null)}
+                title={t("discover.clearTarget")}
+              >
+                ×
+              </button>
+            )}
+          </div>
+          {targetInstance && onBackToInstance && (
+            <button
+              type="button"
+              className="button button--mini button--glass target-instance-bar__back"
+              onClick={onBackToInstance}
+            >
+              ← {t("discover.backToInstance", { name: targetInstance.name })}
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="discover-toolbar">
         <label className="discover-search">
@@ -369,8 +495,10 @@ export function DiscoverPage({
             <div className="catalog-feature__actions">
               <InstallButton
                 task={installState(featured.project_id)}
-                onClick={() => onInstall(featured)}
+                isInstalled={isProjectInstalled(featured)}
+                onClick={() => onInstall(featured, targetInstanceId || undefined)}
                 unavailable={offline}
+                targetInstanceName={targetInstance?.name}
               />
               <button
                 className="button button--glass"
@@ -413,6 +541,12 @@ export function DiscoverPage({
           <div className="catalog-grid">
             {list.map((project, index) => {
               const task = installState(project.project_id);
+              const isInstalled = isProjectInstalled(project);
+              const isActive =
+                task?.status === "downloading" ||
+                task?.status === "installing" ||
+                task?.status === "queued";
+              const isDone = isInstalled || task?.status === "done";
               return (
                 <motion.article
                   className="project-card project-card--clickable"
@@ -489,26 +623,27 @@ export function DiscoverPage({
                       </span>
                     </div>
                     <button
-                      className={`project-install ${
-                        task?.status === "done" ? "is-done" : ""
-                      }`}
+                      className={`project-install ${isDone ? "is-done" : ""}`}
                       onClick={(e) => {
                         e.stopPropagation();
-                        onInstall(project);
+                        onInstall(project, targetInstanceId || undefined);
                       }}
                       disabled={
                         offline ||
-                        task?.status === "downloading" ||
-                        task?.status === "installing" ||
-                        task?.status === "queued" ||
-                        task?.status === "done"
+                        isActive ||
+                        isDone
+                      }
+                      title={
+                        isDone
+                          ? (targetInstance ? t("discover.installedInTarget") : t("discover.inLibrary"))
+                          : targetInstance
+                            ? t("discover.addToTarget", { name: targetInstance.name })
+                            : undefined
                       }
                     >
-                      {task?.status === "done" ? (
+                      {isDone ? (
                         <Check size={16} />
-                      ) : task?.status === "downloading" ||
-                        task?.status === "installing" ||
-                        task?.status === "queued" ? (
+                      ) : isActive ? (
                         <LoaderCircle className="spin" size={16} />
                       ) : (
                         <Download size={16} />
@@ -542,6 +677,7 @@ export function DiscoverPage({
         onInstall={onInstall}
         downloads={downloads}
         instances={instances}
+        targetInstanceId={targetInstanceId}
       />
     </motion.div>
   );
@@ -549,19 +685,23 @@ export function DiscoverPage({
 
 function InstallButton({
   task,
+  isInstalled,
   onClick,
   unavailable,
+  targetInstanceName,
 }: {
   task?: DownloadTask;
+  isInstalled?: boolean;
   onClick: () => void;
   unavailable?: boolean;
+  targetInstanceName?: string;
 }) {
   const { t } = useI18n();
   const active =
     task?.status === "downloading" ||
     task?.status === "installing" ||
     task?.status === "queued";
-  const done = task?.status === "done";
+  const done = isInstalled || task?.status === "done";
   return (
     <button
       className="button button--primary"
@@ -572,7 +712,7 @@ function InstallButton({
         <>{t("discover.offlineInstall")}</>
       ) : done ? (
         <>
-          <Check size={16} /> {t("discover.inLibrary")}
+          <Check size={16} /> {targetInstanceName ? t("discover.installedInTarget") : t("discover.inLibrary")}
         </>
       ) : active ? (
         <>
@@ -581,7 +721,7 @@ function InstallButton({
         </>
       ) : (
         <>
-          <Download size={16} /> {t("discover.install")}
+          <Download size={16} /> {targetInstanceName ? t("discover.addToTarget", { name: targetInstanceName }) : t("discover.install")}
         </>
       )}
     </button>

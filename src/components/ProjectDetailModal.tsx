@@ -44,9 +44,10 @@ import { compactNumber, formatBytes } from "../utils";
 export interface ProjectDetailModalProps {
   project: CatalogProject | null;
   onClose: () => void;
-  onInstall: (project: CatalogProject) => void;
+  onInstall: (project: CatalogProject, targetInstanceId?: string) => void;
   downloads: DownloadTask[];
   instances?: GameInstance[];
+  targetInstanceId?: string | null;
 }
 
 interface NormalizedVersion {
@@ -280,6 +281,7 @@ export function ProjectDetailModal({
   onInstall,
   downloads,
   instances = [],
+  targetInstanceId = null,
 }: ProjectDetailModalProps) {
   const { locale, t } = useI18n();
 
@@ -300,9 +302,18 @@ export function ProjectDetailModal({
   const [installingVersionId, setInstallingVersionId] = useState<string | number | null>(null);
   const [installedVersionIds, setInstalledVersionIds] = useState<Set<string | number>>(new Set());
   const [selectedInstanceId, setSelectedInstanceId] = useState<string>(() => {
+    if (targetInstanceId && instances.some((i) => i.id === targetInstanceId)) {
+      return targetInstanceId;
+    }
     const favorite = instances.find((i) => i.favorite && i.status === "ready");
     return favorite?.id || instances[0]?.id || "";
   });
+
+  useEffect(() => {
+    if (targetInstanceId && instances.some((i) => i.id === targetInstanceId)) {
+      setSelectedInstanceId(targetInstanceId);
+    }
+  }, [targetInstanceId, instances]);
 
   const [previewData, setPreviewData] = useState<ResourcePackInspectResult | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -667,7 +678,7 @@ export function ProjectDetailModal({
             packName: `${project.title} (${version.name})`,
           });
         } else {
-          onInstall(project);
+          onInstall(project, selectedInstanceId || targetInstanceId || undefined);
         }
       } else {
         // Mod install
@@ -685,15 +696,15 @@ export function ProjectDetailModal({
             );
             setInstalledVersionIds((prev) => new Set([...prev, version.id]));
           } else {
-            onInstall(project);
+            onInstall(project, selectedInstanceId || targetInstanceId || undefined);
           }
         } else {
-          onInstall(project);
+          onInstall(project, selectedInstanceId || targetInstanceId || undefined);
         }
       }
     } catch {
       // Fallback to regular install flow
-      onInstall(project);
+      onInstall(project, selectedInstanceId || targetInstanceId || undefined);
     } finally {
       setInstallingVersionId(null);
     }
@@ -812,12 +823,21 @@ export function ProjectDetailModal({
 
                 <button
                   className="button button--primary project-detail__install-btn"
-                  onClick={() => onInstall(project)}
+                  onClick={() =>
+                    onInstall(
+                      project,
+                      selectedInstanceId || targetInstanceId || undefined,
+                    )
+                  }
                   disabled={isInstalling || isInstalled}
                 >
                   {isInstalled ? (
                     <>
-                      <Check size={16} /> {t("discover.inLibrary")}
+                      <Check size={16} />{" "}
+                      {project.project_type !== "modpack" &&
+                      instances.find((i) => i.id === selectedInstanceId)
+                        ? t("discover.installedInTarget")
+                        : t("discover.inLibrary")}
                     </>
                   ) : isInstalling ? (
                     <>
@@ -829,7 +849,13 @@ export function ProjectDetailModal({
                       <Download size={16} />
                       {project.project_type === "modpack"
                         ? t("projectDetail.installModpack")
-                        : t("projectDetail.installMod")}
+                        : instances.find((i) => i.id === selectedInstanceId)
+                          ? t("discover.addToTarget", {
+                              name: instances.find(
+                                (i) => i.id === selectedInstanceId,
+                              )!.name,
+                            })
+                          : t("projectDetail.installMod")}
                     </>
                   )}
                 </button>

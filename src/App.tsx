@@ -94,6 +94,26 @@ export default function App() {
   const [settingsInstance, setSettingsInstance] =
     useState<GameInstance | null>(null);
   const [pendingMod, setPendingMod] = useState<CatalogProject | null>(null);
+  const [activeTargetInstanceId, setActiveTargetInstanceId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem("onyx.targetInstanceId");
+    } catch {
+      return null;
+    }
+  });
+
+  const handleSelectTargetInstance = useCallback((id: string | null) => {
+    setActiveTargetInstanceId(id);
+    try {
+      if (id) {
+        localStorage.setItem("onyx.targetInstanceId", id);
+      } else {
+        localStorage.removeItem("onyx.targetInstanceId");
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
   const [activeLaunch, setActiveLaunch] = useState<ActiveLaunch | null>(null);
   const [launchExpanded, setLaunchExpanded] = useState(false);
   const [supportExportBusy, setSupportExportBusy] = useState(false);
@@ -849,20 +869,48 @@ export default function App() {
       return { ...current, downloads: [task, ...current.downloads] };
     });
     setPendingMod(null);
-    setRoute("downloads");
-    pushToast(
-      "info",
-      t("app.queue.added"),
-      t("app.queue.addedMessage", { name: project.title }),
-    );
+    if (project.project_type === "modpack") {
+      setRoute("downloads");
+      pushToast(
+        "info",
+        t("app.queue.added"),
+        t("app.queue.addedMessage", { name: project.title }),
+      );
+    } else {
+      const targetInst = targetInstanceId
+        ? state?.instances.find((i) => i.id === targetInstanceId)
+        : null;
+      pushToast(
+        "success",
+        targetInst
+          ? t("discover.installedInTarget")
+          : t("app.queue.added"),
+        targetInst
+          ? t("app.install.modQueued", { name: targetInst.name })
+          : t("app.queue.addedMessage", { name: project.title }),
+      );
+    }
   }
 
-  async function installProject(project: CatalogProject) {
+  async function installProject(
+    project: CatalogProject,
+    targetId?: string,
+  ) {
+    const resolvedTargetId = targetId || activeTargetInstanceId;
     if (project.project_type === "mod") {
+      const targetInstance = resolvedTargetId
+        ? state?.instances.find(
+            (i) => i.id === resolvedTargetId && i.status === "ready",
+          )
+        : null;
+      if (targetInstance) {
+        await queueProject(project, targetInstance.id);
+        return;
+      }
       setPendingMod(project);
       return;
     }
-    await queueProject(project);
+    await queueProject(project, resolvedTargetId || undefined);
   }
 
   async function importPack() {
@@ -1139,7 +1187,12 @@ export default function App() {
             onBackup={(item) => void backupInstance(item)}
             onUpdatePack={(item) => void updatePack(item)}
             onExportSync={(item) => void exportSyncProfile(item)}
-            onDiscover={() => setRoute("discover")}
+            onDiscover={(inst) => {
+              if (inst) {
+                handleSelectTargetInstance(inst.id);
+              }
+              setRoute("discover");
+            }}
             onUpdate={updateInstanceRecord}
             onChanged={() => void refreshState()}
             onNotify={(tone, title, message) =>
@@ -1154,7 +1207,15 @@ export default function App() {
             downloads={state.downloads}
             instances={state.instances}
             versions={versions}
-            onInstall={(project) => void installProject(project)}
+            targetInstanceId={activeTargetInstanceId}
+            onSelectTargetInstance={handleSelectTargetInstance}
+            onBackToInstance={() => {
+              if (activeTargetInstanceId) {
+                setSelectedInstanceId(activeTargetInstanceId);
+                setRoute("instance");
+              }
+            }}
+            onInstall={(project, targetId) => void installProject(project, targetId)}
             onNavigate={setRoute}
           />
         );
@@ -1314,9 +1375,12 @@ export default function App() {
         project={pendingMod}
         instances={state.instances}
         onClose={() => setPendingMod(null)}
-        onSelect={(instance) =>
-          pendingMod && void queueProject(pendingMod, instance.id)
-        }
+        onSelect={(instance) => {
+          handleSelectTargetInstance(instance.id);
+          if (pendingMod) {
+            void queueProject(pendingMod, instance.id);
+          }
+        }}
       />
       <OnboardingModal
         open={onboardingOpen}

@@ -2175,9 +2175,104 @@ kbd {
   border: 1px solid rgba(var(--accent-rgb), 0.12);
   border-radius: 7px;
   color: var(--accent);
-  background: rgba(var(--accent-rgb), 0.055);
+  font-weight: 700;
+}
+
+.target-instance-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 8px 12px;
+  margin-bottom: 14px;
+  background: rgba(var(--accent-rgb), 0.04);
+  border: 1px solid rgba(var(--accent-rgb), 0.16);
+  border-radius: 10px;
+  backdrop-filter: blur(12px);
+}
+
+.target-instance-bar__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.target-instance-bar__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: var(--font-caption);
   font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.target-instance-bar__select-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.target-instance-bar__select {
+  height: 28px;
+  padding: 0 24px 0 8px;
+  background: #141719;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.target-instance-bar__select:focus {
+  border-color: var(--accent);
+}
+
+.target-instance-bar__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.target-instance-bar__clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  transition: all 0.15s ease;
+}
+
+.target-instance-bar__clear:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text);
+}
+
+.target-instance-bar__back {
+  margin-left: auto;
+  font-size: 12px;
 }
 
 .discover-toolbar {
