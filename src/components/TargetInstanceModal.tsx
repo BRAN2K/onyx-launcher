@@ -25,16 +25,25 @@ export function TargetInstanceModal({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [project, onClose]);
-  const compatible = instances.filter(
-    (instance) =>
-      instance.status === "ready" &&
-      project?.versions.includes(instance.version) &&
-      (project.categories.some((category) =>
+  const isGenericContent =
+    project?.project_type === "resourcepack" ||
+    project?.project_type === "shader";
+
+  const compatible = instances.filter((instance) => {
+    if (instance.status !== "ready") return false;
+    if (isGenericContent) return true;
+    const versionMatch =
+      !project?.versions?.length || project.versions.includes(instance.version);
+    const loaderMatch =
+      project?.categories.some((category) =>
         instance.loader.toLowerCase().includes(category),
-      ) ||
-        instance.loader.toLowerCase().includes("vanilla")),
-  );
-  const choices = compatible;
+      ) || instance.loader.toLowerCase().includes("vanilla");
+    return versionMatch && loaderMatch;
+  });
+  const choices =
+    compatible.length > 0
+      ? compatible
+      : instances.filter((instance) => instance.status === "ready");
 
   return (
     <AnimatePresence>

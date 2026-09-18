@@ -73,6 +73,15 @@
       "THIRD_PARTY_NOTICES.md",
       "package.json"
     ],
+    "asarUnpack": [
+      "electron/tools/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "electron/tools/onyx-fps-agent.jar",
+        "to": "tools/onyx-fps-agent.jar"
+      }
+    ],
     "win": {
       "icon": "build/icon.ico",
       "target": [

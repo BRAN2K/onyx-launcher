@@ -897,7 +897,7 @@ export default function App() {
     targetId?: string,
   ) {
     const resolvedTargetId = targetId || activeTargetInstanceId;
-    if (project.project_type === "mod") {
+    if (["mod", "resourcepack", "shader"].includes(project.project_type)) {
       const targetInstance = resolvedTargetId
         ? state?.instances.find(
             (i) => i.id === resolvedTargetId && i.status === "ready",

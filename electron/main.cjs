@@ -706,7 +706,17 @@ async function runInstall(instance) {
   return promise;
 }
 
-function selectModFile(version) {
+function selectProjectFile(version, projectType = "mod") {
+  if (projectType === "resourcepack" || projectType === "shader") {
+    return (
+      version?.files?.find(
+        (item) => item.primary && /\.(?:zip|jar)$/i.test(item.filename),
+      ) ||
+      version?.files?.find((item) => /\.(?:zip|jar)$/i.test(item.filename)) ||
+      version?.files?.[0] ||
+      null
+    );
+  }
   return (
     version?.files?.find(
       (item) =>
@@ -721,6 +731,10 @@ function selectModFile(version) {
     ) ||
     null
   );
+}
+
+function selectModFile(version) {
+  return selectProjectFile(version, "mod");
 }
 
 async function dependencyVersion(dependency, profile, signal) {
@@ -776,36 +790,43 @@ async function resolveRequiredModVersions(rootVersion, profile, signal) {
 
 async function installModToInstance(project, targetInstance, task, signal) {
   const profile = loaderInfo(targetInstance);
-  if (profile.loader === "vanilla") {
+  if (project.project_type === "mod" && profile.loader === "vanilla") {
     throw new Error(
       "JAR mods require a Fabric, Quilt, Forge, or NeoForge instance",
     );
   }
 
+  const targetFolders = {
+    mod: "mods",
+    resourcepack: "resourcepacks",
+    shader: "shaderpacks",
+  };
+  const targetDirName = targetFolders[project.project_type] || "mods";
+  const targetDirectory = path.join(
+    state.settings.gameDirectory,
+    targetInstance.id,
+    targetDirName,
+  );
+  await fsp.mkdir(targetDirectory, { recursive: true });
+
   if (project.source === "curseforge") {
     const modId = project.curseforgeId || project.project_id;
     const files = await curseforgeService.getCurseForgeFiles(modId, {
       gameVersion: profile.minecraftVersion,
-      loader: profile.loader,
+      loader: project.project_type === "mod" ? profile.loader : undefined,
       pageSize: 10,
     });
     const chosen = files.find((f) => f.releaseType === 1) || files[0];
     if (!chosen) {
       throw new Error(
-        `No compatible CurseForge file found for ${profile.minecraftVersion} (${profile.loader})`,
+        `No compatible CurseForge file found for ${profile.minecraftVersion}`,
       );
     }
     const downloadUrl = curseforgeService.resolveFileUrl(chosen);
     if (!downloadUrl) {
-      throw new Error("Could not resolve download URL for selected mod");
+      throw new Error("Could not resolve download URL for selected file");
     }
-    const modsDir = path.join(
-      state.settings.gameDirectory,
-      targetInstance.id,
-      "mods",
-    );
-    await fsp.mkdir(modsDir, { recursive: true });
-    const dest = path.join(modsDir, chosen.fileName);
+    const dest = path.join(targetDirectory, chosen.fileName);
     await downloadFile({
       url: downloadUrl,
       destination: dest,
@@ -826,7 +847,9 @@ async function installModToInstance(project, targetInstance, task, signal) {
     };
   }
   const loaderFacet =
-    profile.loader === "vanilla" ? null : profile.loader.toLowerCase();
+    project.project_type === "mod" && profile.loader !== "vanilla"
+      ? profile.loader.toLowerCase()
+      : null;
   const facets = [
     `game_versions=${encodeURIComponent(
       JSON.stringify([profile.minecraftVersion]),
@@ -837,43 +860,52 @@ async function installModToInstance(project, targetInstance, task, signal) {
   ]
     .filter(Boolean)
     .join("&");
-  const versions = await fetchJson(
+  let versions = await fetchJson(
     `https://api.modrinth.com/v2/project/${encodeURIComponent(
       project.project_id,
     )}/version?${facets}`,
     { signal },
   );
-  const version =
-    versions.find((item) => item.version_type === "release") || versions[0];
-  if (!version) {
-    throw new Error(
-      `No mod version is available for Minecraft ${profile.minecraftVersion} and ${profile.loader}`,
+  if ((!versions || versions.length === 0) && project.project_type !== "mod") {
+    versions = await fetchJson(
+      `https://api.modrinth.com/v2/project/${encodeURIComponent(
+        project.project_id,
+      )}/version`,
+      { signal },
     );
   }
-  const resolvedVersions = await resolveRequiredModVersions(
-    version,
-    profile,
-    signal,
-  );
-  const modsDirectory = path.join(
-    state.settings.gameDirectory,
-    targetInstance.id,
-    "mods",
-  );
+  const version =
+    versions?.find((item) => item.version_type === "release") || versions?.[0];
+  if (!version) {
+    throw new Error(
+      `No compatible version is available for ${project.title}`,
+    );
+  }
+  const resolvedVersions =
+    project.project_type === "mod"
+      ? await resolveRequiredModVersions(version, profile, signal)
+      : [version];
+
+  let lastDestination = null;
   const installed = [];
   for (let index = 0; index < resolvedVersions.length; index += 1) {
     const currentVersion = resolvedVersions[index];
-    const file = selectModFile(currentVersion);
+    const file = selectProjectFile(currentVersion, project.project_type);
     if (!file) {
       if (currentVersion.id === version.id) {
-        throw new Error("No JAR file was found in the project version");
+        throw new Error(
+          project.project_type === "mod"
+            ? "No JAR file was found in the project version"
+            : "No downloadable archive was found in the project version",
+        );
       }
       continue;
     }
     const destination = path.join(
-      modsDirectory,
+      targetDirectory,
       file.filename.replace(/[^a-zA-Z0-9._+()-]/g, "_"),
     );
+    lastDestination = destination;
     const result = await downloadFile({
       url: safeModrinthDownload(file.url),
       destination,
@@ -893,9 +925,9 @@ async function installModToInstance(project, targetInstance, task, signal) {
           speed: speed ?? undefined,
           eta: eta ?? undefined,
           subtitle:
-            index === 0
-              ? `${targetInstance.name} · ${version.name}`
-              : `Dependency ${index}/${resolvedVersions.length - 1}: ${currentVersion.name}`,
+            resolvedVersions.length > 1
+              ? `Installing dependency ${index + 1}/${resolvedVersions.length}: ${file.filename}`
+              : `Downloading ${file.filename}`,
         });
       },
     });
@@ -2451,7 +2483,7 @@ function registerIpc() {
 
       void (async () => {
         try {
-          if (project.project_type === "mod") {
+          if (["mod", "resourcepack", "shader"].includes(project.project_type)) {
             const target =
               state.instances.find((item) => item.id === targetInstanceId) ||
               state.instances.find(
@@ -2460,7 +2492,7 @@ function registerIpc() {
               state.instances.find((item) => item.status === "ready");
             if (!target) {
               throw new Error(
-                "Install the game instance before adding a mod",
+                "Install the game instance before adding content",
               );
             }
             const result = await installModToInstance(
@@ -2477,10 +2509,18 @@ function registerIpc() {
                 : `Installed in “${target.name}”`,
               localPath: result.destination,
             });
-            const content = await listInstanceContent(target.id);
-            instanceUpdate(target, {
-              modCount: content.length,
-            });
+            const contentKind =
+              project.project_type === "resourcepack"
+                ? "resourcepacks"
+                : project.project_type === "shader"
+                  ? "shaderpacks"
+                  : "mods";
+            const content = await listInstanceContent(target.id, contentKind);
+            if (project.project_type === "mod") {
+              instanceUpdate(target, {
+                modCount: content.length,
+              });
+            }
           } else {
             let instance;
             if (project.source === "curseforge") {

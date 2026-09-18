@@ -35,13 +35,91 @@ async function firstExecutable(candidates, platform = process.platform) {
   return null;
 }
 
-const ONYX_AGENT_JAR = path.resolve(__dirname, "..", "tools", "onyx-fps-agent.jar");
+function getExtractedAgentPath() {
+  try {
+    const { app } = require("electron");
+    if (app && typeof app.getPath === "function") {
+      return path.join(app.getPath("userData"), "tools", "onyx-fps-agent.jar");
+    }
+  } catch {
+    // electron app might not be available in standalone test runner
+  }
+  const os = require("node:os");
+  return path.join(os.tmpdir(), "onyx-launcher", "onyx-fps-agent.jar");
+}
+
+function extractAgentToDisk(sourcePath) {
+  const targetPath = getExtractedAgentPath();
+  try {
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    if (fs.existsSync(targetPath)) {
+      const srcStat = fs.statSync(sourcePath);
+      const dstStat = fs.statSync(targetPath);
+      if (srcStat.size === dstStat.size && srcStat.size > 0) {
+        return targetPath;
+      }
+    }
+    const data = fs.readFileSync(sourcePath);
+    fs.writeFileSync(targetPath, data);
+    return targetPath;
+  } catch (err) {
+    console.warn("Error extracting onyx-fps-agent.jar:", err);
+    return null;
+  }
+}
+
+function resolveOnyxAgentJar() {
+  const directPath = path.resolve(__dirname, "..", "tools", "onyx-fps-agent.jar");
+  const unpackedAsarPath = directPath.replace("app.asar", "app.asar.unpacked");
+
+  const candidates = [
+    // 1. Unpacked asar path (when asarUnpack is used)
+    unpackedAsarPath,
+    // 2. Extra resources in packaged app
+    process.resourcesPath
+      ? path.join(process.resourcesPath, "tools", "onyx-fps-agent.jar")
+      : null,
+    process.resourcesPath
+      ? path.join(process.resourcesPath, "onyx-fps-agent.jar")
+      : null,
+    // 3. User data / tmp extracted location
+    getExtractedAgentPath(),
+    // 4. Direct path (only if not inside app.asar)
+    directPath,
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (candidate.includes("app.asar")) continue;
+    try {
+      if (fs.existsSync(candidate)) {
+        return path.resolve(candidate);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // If running from packaged app.asar and no external file exists yet, extract it!
+  try {
+    if (fs.existsSync(directPath)) {
+      const extracted = extractAgentToDisk(directPath);
+      if (extracted && fs.existsSync(extracted)) {
+        return extracted;
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return null;
+}
 
 async function detectFpsRecorder({
   platform = process.platform,
   env = process.env,
 } = {}) {
-  const hasAgent = fs.existsSync(ONYX_AGENT_JAR);
+  const agentJar = resolveOnyxAgentJar();
+  const hasAgent = Boolean(agentJar);
 
   if (platform === "linux") {
     const executable = await firstExecutable(
@@ -71,7 +149,7 @@ async function detectFpsRecorder({
       available: true,
       provider: "onyx-agent",
       name: "Onyx Probe",
-      executable: ONYX_AGENT_JAR,
+      executable: agentJar,
       platform,
       installHint: null,
       installable: false,
@@ -346,11 +424,15 @@ class FpsRecorder {
       };
     }
     if (this.status.provider === "onyx-agent") {
+      const agentPath = this.status.executable;
+      if (!agentPath || agentPath.includes("app.asar") || !fs.existsSync(agentPath)) {
+        return { status: this.status, wrapper: null, extraJvmArguments: [] };
+      }
       return {
         status: this.status,
         wrapper: null,
         extraJvmArguments: [
-          `-javaagent:${this.status.executable}=${this.outputFile}`,
+          `-javaagent:${agentPath}=${this.outputFile}`,
         ],
       };
     }

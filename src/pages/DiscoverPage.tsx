@@ -94,7 +94,13 @@ export function DiscoverPage({
       setInstalledModNames(new Set());
       return;
     }
-    window.onyx?.state?.listContent?.(targetInstanceId, "mods")
+    const kind =
+      projectType === "resourcepack"
+        ? "resourcepacks"
+        : projectType === "shader"
+          ? "shaderpacks"
+          : "mods";
+    window.onyx?.state?.listContent?.(targetInstanceId, kind)
       .then((items) => {
         if (cancelled || !Array.isArray(items)) return;
         const set = new Set<string>();
@@ -110,7 +116,7 @@ export function DiscoverPage({
     return () => {
       cancelled = true;
     };
-  }, [targetInstanceId, downloads]);
+  }, [targetInstanceId, projectType, downloads]);
 
   useEffect(() => {
     let cancelled = false;
